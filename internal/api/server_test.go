@@ -122,7 +122,7 @@ func TestUtilEnv(t *testing.T) {
 	}
 }
 
-func TestResourceCRUDAndTokenSingularCreate(t *testing.T) {
+func TestResourceCRUD(t *testing.T) {
 	ts := newTestServer(t)
 	base := ts.URL + "/api"
 
@@ -135,8 +135,6 @@ func TestResourceCRUDAndTokenSingularCreate(t *testing.T) {
 		{"/collections", "/collection/alpha", map[string]any{"name": "alpha", "subscriptions": []string{}}},
 		{"/files", "/file/alpha", map[string]any{"name": "alpha", "content": testNodes}},
 		{"/artifacts", "/artifact/alpha", map[string]any{"name": "alpha", "type": "clash"}},
-		// Tokens are created through the singular path the frontend uses.
-		{"/token", "/token/alpha", map[string]any{"name": "alpha", "subs": []string{}}},
 	}
 
 	for _, tc := range cases {
@@ -329,6 +327,23 @@ func TestStorageImportRejectsBackupWithoutSettings(t *testing.T) {
 	status, env, raw := do(t, http.MethodPost, ts.URL+"/api/storage", map[string]any{"content": `{"subs":{}}`})
 	if status != http.StatusBadRequest || env.Error == nil || env.Error.Code != "INVALID_BACKUP_DATA" {
 		t.Fatalf("expected INVALID_BACKUP_DATA, got %d %s", status, raw)
+	}
+}
+
+func TestShareTokenCreateIsNotImplemented(t *testing.T) {
+	ts := newTestServer(t)
+	body := map[string]any{"payload": map[string]any{"type": "sub", "name": "x"}}
+	status, env, raw := do(t, http.MethodPost, ts.URL+"/api/token", body)
+	if status != http.StatusNotImplemented || env.Error == nil || env.Error.Code != "NOT_IMPLEMENTED" {
+		t.Fatalf("expected NOT_IMPLEMENTED, got %d %s", status, raw)
+	}
+}
+
+func TestArchiveDetailIsNotImplemented(t *testing.T) {
+	ts := newTestServer(t)
+	status, env, raw := do(t, http.MethodGet, ts.URL+"/api/archives/some-id", nil)
+	if status != http.StatusNotImplemented || env.Error == nil || env.Error.Code != "NOT_IMPLEMENTED" {
+		t.Fatalf("expected NOT_IMPLEMENTED, got %d %s", status, raw)
 	}
 }
 
