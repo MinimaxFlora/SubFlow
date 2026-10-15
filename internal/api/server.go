@@ -18,6 +18,9 @@ import (
 type Deps struct {
 	Subscriptions *storage.SubscriptionRepo
 	Settings      *storage.SettingsRepo
+	// Resources stores Sub-Store style documents (subs, collections, files,
+	// artifacts, tokens, settings).
+	Resources *storage.ResourceRepo
 	// Fetcher retrieves remote subscription content. It may be nil, in which
 	// case URL-based conversions return an error.
 	Fetcher *fetch.Fetcher
@@ -47,12 +50,45 @@ func New(deps Deps) *Server {
 	mux.HandleFunc("GET /api/subscriptions/{id}/content", s.handleSubscriptionContent)
 	mux.HandleFunc("PUT /api/subscriptions/{id}", s.handleUpdateSubscription)
 	mux.HandleFunc("DELETE /api/subscriptions/{id}", s.handleDeleteSubscription)
-	mux.HandleFunc("GET /api/settings", s.handleGetSettings)
-	mux.HandleFunc("PUT /api/settings", s.handleUpdateSettings)
+	// Flat key/value settings kept on a distinct path; the Sub-Store style
+	// document API owns /api/settings.
+	mux.HandleFunc("GET /api/legacy/settings", s.handleGetSettings)
+	mux.HandleFunc("PUT /api/legacy/settings", s.handleUpdateSettings)
 	mux.HandleFunc("GET /api/platforms", s.handleListPlatforms)
 	mux.HandleFunc("POST /api/convert", s.handleConvert)
 	mux.HandleFunc("POST /api/fetch", s.handleFetch)
-	mux.HandleFunc("GET /api/health/", s.handleHealth)
+
+	// Sub-Store compatible API, consumed by the bundled frontend.
+	mux.HandleFunc("GET /api/utils/env", s.handleUtilEnv)
+	mux.HandleFunc("GET /api/utils/refresh", s.handleUtilRefresh)
+	mux.HandleFunc("POST /api/utils/node-info", s.handleNodeInfo)
+	mux.HandleFunc("GET /api/utils/backup", s.handleNotImplemented("Gist 备份与同步"))
+	mux.HandleFunc("POST /api/utils/age/key-pair", s.handleNotImplemented("age 密钥生成"))
+	mux.HandleFunc("POST /api/utils/age/public-key", s.handleNotImplemented("age 公钥推导"))
+
+	mux.HandleFunc("GET /api/settings", s.handleSettingsGet)
+	mux.HandleFunc("PATCH /api/settings", s.handleSettingsPatch)
+	mux.HandleFunc("GET /api/storage", s.handleStorageExport)
+	mux.HandleFunc("POST /api/storage", s.handleStorageImport)
+
+	mux.HandleFunc("POST /api/preview/{type}", s.handlePreviewRoute)
+	mux.HandleFunc("POST /api/sort/{type}", s.handleSortResource)
+	mux.HandleFunc("GET /api/sub/flow/{name}", s.handleSubFlowRoute)
+
+	mux.HandleFunc("GET /api/sync/artifact/{name}", s.handleNotImplemented("订阅同步"))
+	mux.HandleFunc("GET /api/sync/artifacts", s.handleNotImplemented("订阅同步"))
+	mux.HandleFunc("GET /api/artifacts/restore", s.handleNotImplemented("订阅同步"))
+
+	mux.HandleFunc("GET /api/logs", s.handleLogsList)
+	mux.HandleFunc("DELETE /api/logs", s.handleLogsClear)
+	mux.HandleFunc("DELETE /api/archives/{id}", s.handleNotImplemented("归档管理"))
+	mux.HandleFunc("POST /api/archives/{id}/restore", s.handleNotImplemented("归档恢复"))
+
+	mux.HandleFunc("GET /download/collection/{name}", s.handleDownloadCollection)
+	mux.HandleFunc("GET /download/{name}", s.handleDownloadSub)
+
+	mux.HandleFunc("/api/{type}", s.handleResourceCollection)
+	mux.HandleFunc("/api/{type}/{name}", s.handleResourceItem)
 
 	mux.Handle("/", s.spaHandler())
 

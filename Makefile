@@ -6,7 +6,7 @@ COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || printf 'none')
 BUILD_TIME ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS := -s -w -X github.com/subflow-org/subflow/internal/version.Version=$(VERSION) -X github.com/subflow-org/subflow/internal/version.Commit=$(COMMIT) -X github.com/subflow-org/subflow/internal/version.BuildTime=$(BUILD_TIME)
 GO ?= go
-NPM ?= npm
+PNPM ?= pnpm
 WEB_DIR := web
 BIN_DIR := bin
 DIST_DIR := dist
@@ -35,13 +35,13 @@ help:
 
 init:
 	$(GO) mod download
-	cd $(WEB_DIR) && $(NPM) install --no-audit --no-fund
+	cd $(WEB_DIR) && $(PNPM) install --frozen-lockfile
 
 dev:
-	cd $(WEB_DIR) && $(NPM) run dev
+	cd $(WEB_DIR) && $(PNPM) run dev
 
 frontend:
-	cd $(WEB_DIR) && $(NPM) run build
+	cd $(WEB_DIR) && $(PNPM) run build
 
 backend: frontend
 	@mkdir -p $(BIN_DIR)
@@ -64,7 +64,7 @@ vet:
 	$(GO) vet ./...
 
 typecheck:
-	cd $(WEB_DIR) && $(NPM) run typecheck
+	cd $(WEB_DIR) && $(PNPM) run typecheck
 
 check: fmt test lint build
 

@@ -81,6 +81,7 @@ func run(args []string) error {
 	server := api.New(api.Deps{
 		Subscriptions: storage.NewSubscriptionRepo(db),
 		Settings:      storage.NewSettingsRepo(db),
+		Resources:     storage.NewResourceRepo(db),
 		Fetcher:       fetcher,
 		Assets:        frontendFS(),
 		Dev:           cfg.Dev,
