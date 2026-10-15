@@ -119,13 +119,13 @@ export default {
       themeSetting: "Theme Setting",
       moreSetting: "More Setting",
       apiSetting: "Backend Management",
-      aboutUs: "About Sub-Store",
+      aboutUs: "About SubFlow",
       notFound: "404 Not Found",
       askWhat: {
         sync: {
           title: "What is Sync?",
           content:
-            "Upload your subscriptions/files to a private Gist, which can be accessed at any time on devices that do not run the Sub-Store (e.g. routers, etc.).",
+            "Upload your subscriptions/files to a private Gist, which can be accessed at any time on devices that do not run the SubFlow (e.g. routers, etc.).",
         },
         subEditor: {
           title: "Download no subscription?",
@@ -242,9 +242,9 @@ export default {
       title: "Load data failed",
       desc: "Please check MITM, Rewrite and others in Proxy Tool",
       btn: "Retry",
-      doc: "Visit Sub-Store Docs",
+      doc: "Visit SubFlow Docs",
       followOfficialChannel:
-        "You can also follow Sub-Store official channel and join the group to ask questions",
+        "You can also follow SubFlow official channel and join the group to ask questions",
       about: "Check the project & tutorial",
     },
     collectionItem: {
@@ -1151,7 +1151,7 @@ export default {
       title: "Select Source",
     },
     preview: {
-      title: "Sub-Store Gist",
+      title: "SubFlow Gist",
       content:
         "⚠️ The status of the latest check: {status}.\nYou can update the configuration to trigger a new check.",
       url: "The current gist is the last one that was checked successfully.",
@@ -1545,7 +1545,7 @@ export default {
     currentHostApi: "Current Backend API",
     yhostapi: "Default:https://sub.store ",
     serverDesc:
-      "Configure the back-end server address, such as the back-end service set up on VPS or Render. After the configuration, restart the Sub-Store to take effect. To delete the api, use the original default backend to manually delete the address and click Save",
+      "Configure the back-end server address, such as the back-end service set up on VPS or Render. After the configuration, restart the SubFlow to take effect. To delete the api, use the original default backend to manually delete the address and click Save",
     InputHostApi: {
       title: "Link validation failed invalid link",
       content:

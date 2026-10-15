@@ -119,13 +119,13 @@ export default {
       themeSetting: '主题设置',
       moreSetting: '更多设置',
       apiSetting: '后端管理',
-      aboutUs: '关于 Sub-Store',
+      aboutUs: '关于 SubFlow',
       notFound: '地址未找到',
       askWhat: {
         sync: {
           title: '什么是同步？',
           content:
-            '将订阅/文件上传到私有 Gist，在无法运行 Sub-Store 的设备（例如路由器等）上也可以随时访问。',
+            '将订阅/文件上传到私有 Gist，在无法运行 SubFlow 的设备（例如路由器等）上也可以随时访问。',
         },
         subEditor: {
           title: '下载不了订阅？',
@@ -160,7 +160,7 @@ export default {
       mihomoConfigScriptActionTips: '脚本操作中可使用 JavaScript/YAML 覆写',
     },
     addFileTitle: '创建文件',
-    importFileTitle: '导入 Sub-Store 文件数据',
+    importFileTitle: '导入 SubFlow 文件数据',
     importFileTips: '文件管理页面, 在某个文件左滑/右滑的更多项中, 点击导出图标按钮',
     deleteFile: {
       succeedNotify: '删除文件成功',
@@ -219,7 +219,7 @@ export default {
       label: '导入',
       succeed: '导入成功',
       failed: '导入失败\n{e}',
-      tipsTitle: '导入 Sub-Store 订阅数据',
+      tipsTitle: '导入 SubFlow 订阅数据',
       tipsContent: '订阅管理页面, 在某个订阅左滑/右滑的更多项中, 点击导出图标按钮',
     },
     addSubTitle: '选择要创建的订阅类型',
@@ -231,15 +231,15 @@ export default {
     },
     emptySub: {
       title: '你还没有添加订阅',
-      desc: '添加后开始使用 Sub-Store',
+      desc: '添加后开始使用 SubFlow',
       btn: '立即添加',
     },
     loadFailed: {
       title: '数据加载失败',
       desc: '请检查代理工具的 MITM、Rewrite 等配置',
       btn: '重试',
-      doc: '查看 Sub-Store 教程',
-      followOfficialChannel: '或关注 Sub-Store 官方频道并进群提问',
+      doc: '查看 SubFlow 教程',
+      followOfficialChannel: '或关注 SubFlow 官方频道并进群提问',
       about: '查看项目 & 教程',
     },
     collectionItem: {
@@ -1108,7 +1108,7 @@ export default {
       title: '选择来源',
     },
     preview: {
-      title: 'Sub-Store Gist',
+      title: 'SubFlow Gist',
       content: '最近一次检查的状态: {status}\n更新配置后将自动触发一次检查',
       url: '当前的 gist 为最后一次检查正常的 gist',
       noUrl: '检查成功并上传同步配置后 即可查看',
@@ -1498,7 +1498,7 @@ export default {
     currentHostApi: '当前后端 API',
     yhostapi: '默认:https://sub.store ',
     serverDesc: `配置后端服务器地址，例如 VPS 或 Render 上搭建的后端服务。
-                配置后需要重启 Sub-Store 以生效。如需删除 api，
+                配置后需要重启 SubFlow 以生效。如需删除 api，
                 使用原本的’默认后端‘需要手动删除地址后点击保存。可以跳转链接 查看 小一佬的后端搭建教程：`,
     InputHostApi: {
       title: '链接验证失败 或无效链接',
