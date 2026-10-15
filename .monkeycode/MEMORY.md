@@ -65,3 +65,12 @@ This file records user instructions, preferences, and teachings for reference in
 - Instructions:
   - Docker is not available in this environment, so `make docker-build`, `make docker-up` and `make docker-test` cannot run locally.
   - The Go module pins `modernc.org/sqlite`, which requires go>=1.26.0; the local toolchain auto-switches to a newer Go version for this module.
+
+[Project Knowledge Summary]
+- Date: 2026-10-15
+- Context: Discovered by Agent while running `make check`, which failed at the frontend typecheck step
+- Category: Environment Configuration
+- Instructions:
+  - `web/package.json` pins `packageManager: pnpm@11.0.9`, so corepack resolves pnpm per-directory. The first run in a fresh environment may fail while corepack downloads that version; set `COREPACK_ENABLE_DOWNLOAD_PROMPT=0` and re-run `make check` once the tarball is cached.
+  - The system `pnpm` shim was broken (corepack expected `bin/pnpm.cjs` while the package shipped `bin/pnpm.mjs`); pnpm 11.28.6 is installed at `/opt/pnpm-global/bin/pnpm` if the shim misbehaves.
+  - Building the frontend needs extra heap on this host (`NODE_OPTIONS=--max-old-space-size=2048`) and should run under a managed background terminal with a memory cap (~1.8 GiB peak observed).
