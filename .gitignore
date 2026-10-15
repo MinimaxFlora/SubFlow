@@ -1,0 +1,6 @@
+/data/
+/bin/
+/dist/
+/web/node_modules/
+/web/dist/assets/
+.DS_Store

@@ -1,0 +1,26 @@
+services:
+  subflow:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: subflow:local
+    restart: unless-stopped
+    ports:
+      - "${SUBFLOW_PORT:-8080}:8080"
+    environment:
+      SUBFLOW_HOST: 0.0.0.0
+      SUBFLOW_PORT: 8080
+      SUBFLOW_DATA_DIR: /data
+      SUBFLOW_DB_PATH: /data/subflow.db
+      SUBFLOW_LOG_LEVEL: ${SUBFLOW_LOG_LEVEL:-info}
+    volumes:
+      - subflow-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:8080/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  subflow-data:
