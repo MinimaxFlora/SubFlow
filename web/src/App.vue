@@ -6,6 +6,12 @@ import {
   NDialogProvider,
   NMessageProvider,
   darkTheme,
+  dateEnUS,
+  dateZhCN,
+  dateZhTW,
+  enUS,
+  zhCN,
+  zhTW,
   type GlobalThemeOverrides,
 } from 'naive-ui'
 import NavBar from '@/components/NavBar.vue'
@@ -13,8 +19,10 @@ import SideBar from '@/components/SideBar.vue'
 import TabBar from '@/components/TabBar.vue'
 import { api, type VersionInfo } from '@/api/client'
 import { isDark } from '@/theme'
+import { useI18n } from '@/i18n'
 
 const route = useRoute()
+const { locale, t } = useI18n()
 const version = ref<VersionInfo | null>(null)
 
 onMounted(async () => {
@@ -25,7 +33,18 @@ onMounted(async () => {
   }
 })
 
-const pageTitle = computed(() => (route.meta.title as string) ?? 'SubFlow')
+const pageTitle = computed(() =>
+  route.meta.titleKey ? t(route.meta.titleKey as string) : 'SubFlow',
+)
+const pageSubtitle = computed(() =>
+  route.meta.subtitleKey ? t(route.meta.subtitleKey as string) : undefined,
+)
+
+// Naive UI ships its own translations for built-in component text.
+const naiveLocaleMap = { 'zh-CN': zhCN, en: enUS, 'zh-TW': zhTW } as const
+const naiveDateLocaleMap = { 'zh-CN': dateZhCN, en: dateEnUS, 'zh-TW': dateZhTW } as const
+const naiveLocale = computed(() => naiveLocaleMap[locale.value])
+const naiveDateLocale = computed(() => naiveDateLocaleMap[locale.value])
 
 const overrides = computed<GlobalThemeOverrides>(() => ({
   common: {
@@ -65,10 +84,15 @@ const overrides = computed<GlobalThemeOverrides>(() => ({
 </script>
 
 <template>
-  <n-config-provider :theme="isDark ? darkTheme : null" :theme-overrides="overrides">
+  <n-config-provider
+    :theme="isDark ? darkTheme : null"
+    :theme-overrides="overrides"
+    :locale="naiveLocale"
+    :date-locale="naiveDateLocale"
+  >
     <n-message-provider>
       <n-dialog-provider>
-        <NavBar :title="pageTitle" />
+        <NavBar :title="pageTitle" :subtitle="pageSubtitle" />
         <SideBar />
 
         <main class="page-body">

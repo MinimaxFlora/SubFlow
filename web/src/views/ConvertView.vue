@@ -12,9 +12,11 @@ import {
   type Platform,
   type Subscription,
 } from '@/api/client'
+import { translateError, useI18n } from '@/i18n'
 
 const route = useRoute()
 const message = useMessage()
+const { t } = useI18n()
 
 type SourceMode = 'url' | 'content' | 'saved'
 
@@ -27,71 +29,82 @@ interface ArgField {
   defaultValue?: string
 }
 
-const opSchemas: Record<OperationType, ArgField[]> = {
+// Field definitions keep i18n keys; labels are resolved for the active locale.
+interface FieldDef {
+  key: string
+  labelKey: string
+  kind: 'text' | 'select'
+  placeholder?: string
+  placeholderKey?: string
+  options?: { labelKey: string; value: string }[]
+  defaultValue?: string
+}
+
+const opFieldDefs: Record<OperationType, FieldDef[]> = {
   Filter: [
-    { key: 'regex', label: 'Pattern', kind: 'text', placeholder: 'HK|Japan|expire' },
+    { key: 'regex', labelKey: 'op.pattern', kind: 'text', placeholder: 'HK|Japan|expire' },
     {
       key: 'mode',
-      label: 'Mode',
+      labelKey: 'op.mode',
       kind: 'select',
       defaultValue: 'include',
       options: [
-        { label: 'Include matches', value: 'include' },
-        { label: 'Exclude matches', value: 'exclude' },
+        { labelKey: 'op.mode.include', value: 'include' },
+        { labelKey: 'op.mode.exclude', value: 'exclude' },
       ],
     },
     {
       key: 'field',
-      label: 'Field',
+      labelKey: 'op.field',
       kind: 'select',
       defaultValue: 'name',
       options: [
-        { label: 'Name', value: 'name' },
-        { label: 'Server', value: 'server' },
-        { label: 'Type', value: 'type' },
+        { labelKey: 'op.opt.name', value: 'name' },
+        { labelKey: 'op.opt.server', value: 'server' },
+        { labelKey: 'op.opt.type', value: 'type' },
       ],
     },
   ],
   Rename: [
-    { key: 'prefix', label: 'Prefix', kind: 'text', placeholder: 'SF-' },
-    { key: 'suffix', label: 'Suffix', kind: 'text', placeholder: ' (01)' },
-    { key: 'regex', label: 'Regex', kind: 'text', placeholder: '\\s+node$' },
-    { key: 'replacement', label: 'Replacement', kind: 'text', placeholder: '' },
+    { key: 'prefix', labelKey: 'op.prefix', kind: 'text', placeholder: 'SF-' },
+    { key: 'suffix', labelKey: 'op.suffix', kind: 'text', placeholder: ' (01)' },
+    { key: 'regex', labelKey: 'op.regex', kind: 'text', placeholder: '\\s+node$' },
+    { key: 'replacement', labelKey: 'op.replacement', kind: 'text', placeholder: '' },
   ],
   Deduplicate: [
     {
       key: 'by',
-      label: 'Match by',
+      labelKey: 'op.matchBy',
       kind: 'select',
       defaultValue: 'server',
       options: [
-        { label: 'Server and port', value: 'server' },
-        { label: 'Full identity', value: 'full' },
-        { label: 'Name', value: 'name' },
+        { labelKey: 'op.matchBy.server', value: 'server' },
+        { labelKey: 'op.matchBy.full', value: 'full' },
+        { labelKey: 'op.opt.name', value: 'name' },
       ],
     },
   ],
   Sort: [
     {
       key: 'by',
-      label: 'Sort by',
+      labelKey: 'op.sortBy',
       kind: 'select',
       defaultValue: 'name',
       options: [
-        { label: 'Name', value: 'name' },
-        { label: 'Server', value: 'server' },
-        { label: 'Type', value: 'type' },
-        { label: 'Port', value: 'port' },
+        { labelKey: 'op.opt.name', value: 'name' },
+        { labelKey: 'op.opt.server', value: 'server' },
+        { labelKey: 'op.opt.type', value: 'type' },
+        { labelKey: 'op.opt.port', value: 'port' },
       ],
     },
     {
       key: 'order',
-      label: 'Order',
+      labelKey: 'op.order',
       kind: 'select',
       defaultValue: 'asc',
       options: [
-        { label: 'Ascending', value: 'asc' },
-        { label: 'Descending', value: 'desc' },
+        { labelKey: 'op.order.asc', value: 'asc' },
+        { labelKey: 'op.order.desc', value: 'desc' },
       ],
     },
   ],
@@ -99,25 +112,47 @@ const opSchemas: Record<OperationType, ArgField[]> = {
   SetProperty: [
     {
       key: 'key',
-      label: 'Property',
+      labelKey: 'op.property',
       kind: 'select',
       defaultValue: 'name',
       options: [
-        { label: 'Name', value: 'name' },
-        { label: 'SNI', value: 'sni' },
-        { label: 'Host', value: 'host' },
-        { label: 'Path', value: 'path' },
+        { labelKey: 'op.opt.name', value: 'name' },
+        { labelKey: 'op.opt.sni', value: 'sni' },
+        { labelKey: 'op.opt.host', value: 'host' },
+        { labelKey: 'op.opt.path', value: 'path' },
       ],
     },
-    { key: 'value', label: 'Value', kind: 'text', placeholder: 'new value' },
+    { key: 'value', labelKey: 'op.value', kind: 'text', placeholderKey: 'op.newValue' },
   ],
 }
 
-const opTypes = Object.keys(opSchemas) as OperationType[]
-const opTypeOptions = opTypes.map((t) => ({ label: t, value: t }))
+const opTypes = Object.keys(opFieldDefs) as OperationType[]
 
-const uaPresets = [
-  { label: 'Default (SubFlow)', value: '' },
+// Resolve field labels and option labels for the active locale.
+const opFields = computed<Record<OperationType, ArgField[]>>(() => {
+  const resolved = {} as Record<OperationType, ArgField[]>
+  for (const type of opTypes) {
+    resolved[type] = opFieldDefs[type].map((field) => ({
+      key: field.key,
+      label: t(field.labelKey),
+      kind: field.kind,
+      placeholder: field.placeholderKey ? t(field.placeholderKey) : field.placeholder,
+      defaultValue: field.defaultValue,
+      options: field.options?.map((option) => ({
+        label: t(option.labelKey),
+        value: option.value,
+      })),
+    }))
+  }
+  return resolved
+})
+
+const opTypeOptions = computed(() =>
+  opTypes.map((type) => ({ label: t(`op.type.${type}`), value: type })),
+)
+
+const uaPresets = computed(() => [
+  { label: t('convert.uaDefault'), value: '' },
   { label: 'Clash Verge', value: 'clash-verge/v1.5.0' },
   { label: 'Clash Meta', value: 'mihomo/1.18.0' },
   { label: 'sing-box', value: 'sing-box/1.9.0' },
@@ -125,7 +160,7 @@ const uaPresets = [
   { label: 'Quantumult X', value: 'Quantumult%20X/1.0.30' },
   { label: 'Loon', value: 'Loon/3.1.3' },
   { label: 'Surge', value: 'Surge/5.8.0' },
-]
+])
 
 interface EditableOperation {
   type: OperationType
@@ -154,11 +189,11 @@ const fetching = ref(false)
 const platformOptions = ref<SelectOption[]>([])
 const platformMap = ref<Record<string, Platform>>({})
 
-const modeOptions = [
-  { label: 'Remote URL', value: 'url' },
-  { label: 'Paste content', value: 'content' },
-  { label: 'Saved subscription', value: 'saved' },
-]
+const modeOptions = computed(() => [
+  { label: t('convert.modeUrl'), value: 'url' },
+  { label: t('convert.modeContent'), value: 'content' },
+  { label: t('convert.modeSaved'), value: 'saved' },
+])
 
 const savedOptions = computed(() =>
   subscriptions.value.map((s) => ({ label: s.displayName || s.name, value: s.id })),
@@ -201,7 +236,7 @@ onMounted(async () => {
         .map((p) => ({ label: `${p.name} (.${p.extension})`, value: p.id })),
     }))
   } catch (err) {
-    message.error(err instanceof Error ? err.message : String(err))
+    message.error(translateError(err))
   }
 
   try {
@@ -219,7 +254,7 @@ onMounted(async () => {
 
 function defaultArgs(type: OperationType) {
   const args: Record<string, string> = {}
-  for (const field of opSchemas[type]) {
+  for (const field of opFieldDefs[type]) {
     if (field.defaultValue !== undefined) args[field.key] = field.defaultValue
   }
   return args
@@ -246,7 +281,7 @@ function loadSample() {
 
 async function testFetch() {
   if (!url.value.trim()) {
-    message.warning('Enter a subscription URL first')
+    message.warning(t('convert.enterUrl'))
     return
   }
   fetching.value = true
@@ -255,12 +290,12 @@ async function testFetch() {
     const info = await api.fetchSubscription({ url: url.value.trim(), userAgent: userAgent.value })
     fetchInfo.value = info
     if (info.nodes > 0) {
-      message.success(`Fetched ${info.nodes} node(s)`)
+      message.success(t('convert.fetched', { count: info.nodes }))
     } else {
-      message.warning(info.parseError || 'No nodes found in the response')
+      message.warning(info.parseError || t('convert.noNodes'))
     }
   } catch (err) {
-    message.error(err instanceof Error ? err.message : String(err))
+    message.error(translateError(err))
   } finally {
     fetching.value = false
   }
@@ -291,10 +326,12 @@ async function run() {
       input.content = content.value
     }
     result.value = await api.convert(input)
-    message.success(`Emitted ${result.value.emitted}/${result.value.total} node(s)`)
+    message.success(
+      t('convert.emittedMsg', { emitted: result.value.emitted, total: result.value.total }),
+    )
   } catch (err) {
     result.value = null
-    message.error(err instanceof Error ? err.message : String(err))
+    message.error(translateError(err))
   } finally {
     running.value = false
   }
@@ -304,9 +341,9 @@ async function copyOutput() {
   if (!result.value) return
   try {
     await navigator.clipboard.writeText(result.value.output)
-    message.success('Output copied')
+    message.success(t('convert.copied'))
   } catch {
-    message.error('Clipboard unavailable')
+    message.error(t('common.clipboard'))
   }
 }
 
@@ -326,10 +363,10 @@ function downloadOutput() {
   <div class="views">
     <section class="card">
       <div class="card-head">
-        <span class="title"><Icon name="link" :size="16" /> Source</span>
+        <span class="title"><Icon name="link" :size="16" /> {{ t('convert.source') }}</span>
         <n-button size="tiny" quaternary @click="loadSample">
           <template #icon><Icon name="zap" :size="14" /></template>
-          Sample
+          {{ t('convert.sample') }}
         </n-button>
       </div>
       <div class="card-body source-body">
@@ -354,16 +391,21 @@ function downloadOutput() {
             <n-select v-model:value="userAgent" :options="uaPresets" size="small" style="max-width: 220px" />
             <n-button size="small" :loading="fetching" @click="testFetch">
               <template #icon><Icon name="cloud" :size="14" /></template>
-              Test fetch
+              {{ t('convert.testFetch') }}
             </n-button>
           </div>
           <div v-if="fetchInfo" class="note" :class="fetchInfo.nodes ? 'ok' : 'bad'">
             <Icon :name="fetchInfo.nodes ? 'check' : 'alert'" :size="15" />
             <span v-if="fetchInfo.nodes">
-              {{ fetchInfo.nodes }} nodes · {{ (fetchInfo.bytes / 1024).toFixed(1) }} KiB ·
-              {{ fetchInfo.finalUrl }}
+              {{
+                t('convert.fetchNote', {
+                  count: fetchInfo.nodes,
+                  size: (fetchInfo.bytes / 1024).toFixed(1),
+                  url: fetchInfo.finalUrl,
+                })
+              }}
             </span>
-            <span v-else>{{ fetchInfo.parseError || 'No nodes found in the response' }}</span>
+            <span v-else>{{ fetchInfo.parseError || t('convert.noNodes') }}</span>
           </div>
         </div>
 
@@ -372,20 +414,24 @@ function downloadOutput() {
             v-model:value="content"
             type="textarea"
             :autosize="{ minRows: 6, maxRows: 14 }"
-            placeholder="Paste a URI list or Base64 subscription"
+            :placeholder="t('convert.contentPlaceholder')"
           />
         </div>
 
         <div v-else class="source-block">
-          <n-select v-model:value="savedId" :options="savedOptions" placeholder="Choose a subscription" />
-          <p v-if="!savedOptions.length" class="hint">No saved subscriptions yet.</p>
+          <n-select
+            v-model:value="savedId"
+            :options="savedOptions"
+            :placeholder="t('convert.chooseSubscription')"
+          />
+          <p v-if="!savedOptions.length" class="hint">{{ t('convert.noSaved') }}</p>
         </div>
       </div>
     </section>
 
     <section class="card">
       <div class="card-head">
-        <span class="title"><Icon name="globe" :size="16" /> Target platform</span>
+        <span class="title"><Icon name="globe" :size="16" /> {{ t('convert.target') }}</span>
         <span v-if="selectedPlatform" class="tag primary">
           {{ selectedPlatform.name }} · .{{ selectedPlatform.extension }}
         </span>
@@ -394,17 +440,19 @@ function downloadOutput() {
         <n-select v-model:value="platform" :options="platformOptions" filterable />
         <label class="toggle">
           <n-switch v-model:value="includeUnsupported" size="small" />
-          <span>Keep nodes the target cannot represent</span>
+          <span>{{ t('convert.keepUnsupported') }}</span>
         </label>
       </div>
     </section>
 
     <section class="card">
       <div class="card-head">
-        <span class="title"><Icon name="sliders" :size="16" /> Processing operations</span>
+        <span class="title">
+          <Icon name="sliders" :size="16" /> {{ t('convert.operations') }}
+        </span>
         <n-button size="tiny" @click="addOperation">
           <template #icon><Icon name="plus" :size="14" /></template>
-          Add
+          {{ t('common.add') }}
         </n-button>
       </div>
       <div class="card-body">
@@ -419,12 +467,12 @@ function downloadOutput() {
                 style="width: 150px"
                 @update:value="(value: OperationType) => changeType(op, value)"
               />
-              <button class="icon-btn danger" title="Remove" @click="removeOperation(index)">
+              <button class="icon-btn danger" :title="t('convert.removeOp')" @click="removeOperation(index)">
                 <Icon name="x" :size="15" />
               </button>
             </div>
-            <div v-if="opSchemas[op.type].length" class="op-args">
-              <div v-for="field in opSchemas[op.type]" :key="field.key" class="op-arg">
+            <div v-if="opFields[op.type].length" class="op-args">
+              <div v-for="field in opFields[op.type]" :key="field.key" class="op-arg">
                 <span class="arg-label">{{ field.label }}</span>
                 <n-select
                   v-if="field.kind === 'select'"
@@ -440,30 +488,30 @@ function downloadOutput() {
                 />
               </div>
             </div>
-            <p v-else class="hint">No parameters required.</p>
+            <p v-else class="hint">{{ t('convert.noParams') }}</p>
           </div>
         </div>
-        <p v-else class="hint">Nodes pass through unchanged. Add an operation to filter, rename, sort or dedupe.</p>
+        <p v-else class="hint">{{ t('convert.opsHint') }}</p>
       </div>
     </section>
 
     <n-button type="primary" block size="large" :disabled="!canRun" :loading="running" @click="run">
       <template #icon><Icon name="play" :size="17" /></template>
-      Convert
+      {{ t('convert.run') }}
     </n-button>
 
     <section class="card">
       <div class="card-head">
-        <span class="title"><Icon name="server" :size="16" /> Output</span>
+        <span class="title"><Icon name="server" :size="16" /> {{ t('convert.output') }}</span>
         <div class="row">
           <span v-if="result" class="tag ok">{{ result.platform }}</span>
           <n-button v-if="result" size="tiny" @click="copyOutput">
             <template #icon><Icon name="copy" :size="14" /></template>
-            Copy
+            {{ t('common.copy') }}
           </n-button>
           <n-button v-if="result" size="tiny" @click="downloadOutput">
             <template #icon><Icon name="download" :size="14" /></template>
-            Download
+            {{ t('common.download') }}
           </n-button>
         </div>
       </div>
@@ -472,15 +520,15 @@ function downloadOutput() {
           <div class="stats-row">
             <div class="stat-mini">
               <span class="stat-mini-value">{{ result.total }}</span>
-              <span class="stat-mini-label">parsed</span>
+              <span class="stat-mini-label">{{ t('convert.parsed') }}</span>
             </div>
             <div class="stat-mini">
               <span class="stat-mini-value">{{ result.emitted }}</span>
-              <span class="stat-mini-label">emitted</span>
+              <span class="stat-mini-label">{{ t('convert.emitted') }}</span>
             </div>
             <div class="stat-mini">
               <span class="stat-mini-value">{{ outputLines }}</span>
-              <span class="stat-mini-label">lines</span>
+              <span class="stat-mini-label">{{ t('convert.lines') }}</span>
             </div>
           </div>
           <div v-if="result.source" class="note">
@@ -493,12 +541,12 @@ function downloadOutput() {
               <p v-for="warning in result.warnings" :key="warning">{{ warning }}</p>
             </div>
           </div>
-          <pre class="code-panel">{{ result.output || '(empty output)' }}</pre>
+          <pre class="code-panel">{{ result.output || t('convert.emptyOutput') }}</pre>
         </template>
         <div v-else class="empty">
           <span class="empty-icon"><Icon name="convert" :size="22" /></span>
-          <h3>No output yet</h3>
-          <p>Configure a source and platform, then hit Convert.</p>
+          <h3>{{ t('convert.noOutputTitle') }}</h3>
+          <p>{{ t('convert.noOutputHint') }}</p>
         </div>
       </div>
     </section>

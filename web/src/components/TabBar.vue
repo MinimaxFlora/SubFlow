@@ -3,9 +3,11 @@ import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Icon from '@/components/Icon.vue'
 import { navItems } from '@/nav'
+import { useI18n } from '@/i18n'
 
 const route = useRoute()
 const router = useRouter()
+const { t } = useI18n()
 const activeKey = computed(() => (route.name as string) ?? 'overview')
 </script>
 
@@ -21,7 +23,7 @@ const activeKey = computed(() => (route.name as string) ?? 'overview')
         @click="router.push({ name: item.key })"
       >
         <Icon :name="item.icon" :size="22" />
-        <span>{{ item.label }}</span>
+        <span>{{ t(item.labelKey) }}</span>
       </button>
     </nav>
   </div>

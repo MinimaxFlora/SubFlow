@@ -4,9 +4,11 @@ import { useRouter } from 'vue-router'
 import { NButton, NSpin, useMessage } from 'naive-ui'
 import Icon from '@/components/Icon.vue'
 import { api, type Platform, type Subscription } from '@/api/client'
+import { translateError, useI18n } from '@/i18n'
 
 const router = useRouter()
 const message = useMessage()
+const { t } = useI18n()
 const loading = ref(true)
 const platforms = ref<Platform[]>([])
 const subscriptions = ref<Subscription[]>([])
@@ -19,7 +21,7 @@ onMounted(async () => {
     platforms.value = platformList
     subscriptions.value = subs
   } catch (err) {
-    message.error(err instanceof Error ? err.message : String(err))
+    message.error(translateError(err))
   } finally {
     loading.value = false
   }
@@ -49,31 +51,30 @@ const recent = computed(() =>
     <div class="views">
       <section class="banner card">
         <div class="banner-copy">
-          <span class="banner-eyebrow"><Icon name="zap" :size="13" /> Multi-platform conversion engine</span>
-          <h2>One subscription, any client.</h2>
-          <p>
-            SubFlow parses a unified node model, applies processing rules, then renders the result for
-            Clash, sing-box, Surge, Loon, Quantumult X and more.
-          </p>
+          <span class="banner-eyebrow">
+            <Icon name="zap" :size="13" /> {{ t('overview.eyebrow') }}
+          </span>
+          <h2>{{ t('overview.headline') }}</h2>
+          <p>{{ t('overview.description') }}</p>
           <div class="banner-actions">
             <n-button type="primary" @click="router.push({ name: 'convert' })">
               <template #icon><Icon name="convert" :size="16" /></template>
-              Open converter
+              {{ t('overview.openConverter') }}
             </n-button>
             <n-button class="ghost" @click="router.push({ name: 'subs' })">
               <template #icon><Icon name="layers" :size="16" /></template>
-              Manage sources
+              {{ t('overview.manageSources') }}
             </n-button>
           </div>
         </div>
         <div class="banner-badges">
           <div class="banner-badge">
             <span class="value">{{ platforms.length }}</span>
-            <span class="label-text">formats</span>
+            <span class="label-text">{{ t('overview.badgeFormats') }}</span>
           </div>
           <div class="banner-badge">
             <span class="value">{{ protocols.length }}</span>
-            <span class="label-text">protocols</span>
+            <span class="label-text">{{ t('overview.badgeProtocols') }}</span>
           </div>
         </div>
       </section>
@@ -83,44 +84,48 @@ const recent = computed(() =>
           <span class="stat-icon"><Icon name="layers" :size="18" /></span>
           <div class="stat-copy">
             <span class="stat-value">{{ subscriptions.length }}</span>
-            <span class="stat-label">Subscriptions</span>
+            <span class="stat-label">{{ t('overview.statSubscriptions') }}</span>
           </div>
-          <span class="stat-note">{{ activeSubs }} enabled</span>
+          <span class="stat-note">{{ t('overview.statEnabled', { count: activeSubs }) }}</span>
         </article>
         <article class="stat">
           <span class="stat-icon"><Icon name="globe" :size="18" /></span>
           <div class="stat-copy">
             <span class="stat-value">{{ platforms.length }}</span>
-            <span class="stat-label">Target platforms</span>
+            <span class="stat-label">{{ t('overview.statTargets') }}</span>
           </div>
-          <span class="stat-note">{{ groupedPlatforms.length }} families</span>
+          <span class="stat-note">
+            {{ t('overview.statFamilies', { count: groupedPlatforms.length }) }}
+          </span>
         </article>
         <article class="stat">
           <span class="stat-icon"><Icon name="server" :size="18" /></span>
           <div class="stat-copy">
             <span class="stat-value">{{ protocols.length }}</span>
-            <span class="stat-label">Node protocols</span>
+            <span class="stat-label">{{ t('overview.statProtocols') }}</span>
           </div>
-          <span class="stat-note">unified model</span>
+          <span class="stat-note">{{ t('overview.statUnifiedModel') }}</span>
         </article>
         <article class="stat">
           <span class="stat-icon"><Icon name="shield" :size="18" /></span>
           <div class="stat-copy">
-            <span class="stat-value">SSRF</span>
-            <span class="stat-label">Fetch guard</span>
+            <span class="stat-value">{{ t('overview.statSsrf') }}</span>
+            <span class="stat-label">{{ t('overview.statFetchGuard') }}</span>
           </div>
-          <span class="stat-note">private blocked</span>
+          <span class="stat-note">{{ t('overview.statPrivateBlocked') }}</span>
         </article>
       </div>
 
       <section class="card">
         <div class="card-head">
-          <span class="title"><Icon name="globe" :size="16" /> Supported targets</span>
-          <span class="hint">{{ platforms.length }} formats</span>
+          <span class="title"><Icon name="globe" :size="16" /> {{ t('overview.supportedTargets') }}</span>
+          <span class="hint">{{ t('overview.formatCount', { count: platforms.length }) }}</span>
         </div>
         <div class="card-body">
           <div v-for="group in groupedPlatforms" :key="group.group" class="platform-group">
-            <span class="platform-group-title">{{ group.group }}</span>
+            <span class="platform-group-title">
+              {{ t(`platformGroup.${group.group}`) }}
+            </span>
             <div class="platform-chips">
               <span v-for="p in group.items" :key="p.id" class="tag">
                 {{ p.name }}<em>.{{ p.extension }}</em>
@@ -132,8 +137,10 @@ const recent = computed(() =>
 
       <section class="card">
         <div class="card-head">
-          <span class="title"><Icon name="layers" :size="16" /> Recent sources</span>
-          <n-button size="tiny" quaternary @click="router.push({ name: 'subs' })">Manage</n-button>
+          <span class="title"><Icon name="layers" :size="16" /> {{ t('overview.recentSources') }}</span>
+          <n-button size="tiny" quaternary @click="router.push({ name: 'subs' })">
+            {{ t('common.manage') }}
+          </n-button>
         </div>
         <div class="card-body">
           <div v-if="recent.length" class="recent-list">
@@ -156,7 +163,7 @@ const recent = computed(() =>
                 <p class="sub-detail">
                   <span class="row">
                     <Icon :name="sub.source === 'remote' ? 'cloud' : 'file'" :size="12" />
-                    <span class="truncate">{{ sub.url || 'inline content' }}</span>
+                    <span class="truncate">{{ sub.url || t('source.inlineContent') }}</span>
                   </span>
                 </p>
               </div>
@@ -164,10 +171,10 @@ const recent = computed(() =>
           </div>
           <div v-else class="empty">
             <span class="empty-icon"><Icon name="layers" :size="22" /></span>
-            <h3>No sources yet</h3>
-            <p>Add a remote URL or paste content to begin.</p>
+            <h3>{{ t('overview.emptyTitle') }}</h3>
+            <p>{{ t('overview.emptyDescription') }}</p>
             <n-button size="small" type="primary" @click="router.push({ name: 'subs' })">
-              Add subscription
+              {{ t('overview.addSubscription') }}
             </n-button>
           </div>
         </div>

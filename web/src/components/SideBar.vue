@@ -3,9 +3,11 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Icon from '@/components/Icon.vue'
 import { navItems } from '@/nav'
+import { useI18n } from '@/i18n'
 
 const route = useRoute()
 const router = useRouter()
+const { t } = useI18n()
 
 const activeKey = computed(() => (route.name as string) ?? 'overview')
 
@@ -28,11 +30,11 @@ onUnmounted(() => window.removeEventListener('resize', onResize))
         :key="item.key"
         class="menu-item"
         :class="{ active: activeKey === item.key }"
-        :title="item.label"
+        :title="t(item.labelKey)"
         @click="router.push({ name: item.key })"
       >
         <Icon :name="item.icon" :size="22" />
-        <span class="label">{{ item.label }}</span>
+        <span class="label">{{ t(item.labelKey) }}</span>
       </div>
     </div>
   </aside>

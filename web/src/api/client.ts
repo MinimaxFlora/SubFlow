@@ -96,6 +96,17 @@ interface Envelope<T> {
   error: { code: string; message: string } | null
 }
 
+// ApiError carries the backend error code so the UI can localize it.
+export class ApiError extends Error {
+  code: string
+
+  constructor(code: string, message: string) {
+    super(message)
+    this.name = 'ApiError'
+    this.code = code
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     headers: { 'Content-Type': 'application/json' },
@@ -108,8 +119,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     body = null
   }
   if (!response.ok || (body && body.error)) {
-    const message = body?.error?.message ?? `request failed with status ${response.status}`
-    throw new Error(message)
+    if (body?.error) {
+      throw new ApiError(body.error.code, body.error.message)
+    }
+    throw new ApiError('HTTP_ERROR', `request failed with status ${response.status}`)
   }
   return body?.data as T
 }

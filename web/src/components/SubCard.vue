@@ -2,8 +2,11 @@
 import { NSwitch } from 'naive-ui'
 import Icon from '@/components/Icon.vue'
 import type { Subscription } from '@/api/client'
+import { useI18n } from '@/i18n'
 
 defineProps<{ sub: Subscription }>()
+
+const { localeTag, t } = useI18n()
 
 const emit = defineEmits<{
   open: [sub: Subscription]
@@ -19,7 +22,7 @@ function initials(sub: Subscription) {
 }
 
 function host(sub: Subscription) {
-  if (!sub.url) return 'inline content'
+  if (!sub.url) return t('source.inlineContent')
   try {
     return new URL(sub.url).host
   } catch {
@@ -30,7 +33,7 @@ function host(sub: Subscription) {
 function updated(value: string) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
-  return date.toLocaleString()
+  return date.toLocaleString(localeTag.value)
 }
 </script>
 
@@ -44,21 +47,23 @@ function updated(value: string) {
       <div class="sub-head">
         <h3 class="sub-title">
           <span class="name">{{ sub.displayName || sub.name }}</span>
-          <span class="tag" :class="sub.source === 'remote' ? 'primary' : ''">{{ sub.source }}</span>
-          <span v-if="!sub.enabled" class="tag danger">off</span>
+          <span class="tag" :class="sub.source === 'remote' ? 'primary' : ''">
+            {{ t(`source.${sub.source}`) }}
+          </span>
+          <span v-if="!sub.enabled" class="tag danger">{{ t('subCard.off') }}</span>
         </h3>
 
         <div class="sub-menu" @click.stop>
-          <button type="button" title="Copy link" @click="emit('copy', sub)">
+          <button type="button" :title="t('subCard.copyLink')" @click="emit('copy', sub)">
             <Icon name="copy" :size="16" />
           </button>
-          <button type="button" title="Convert" @click="emit('open', sub)">
+          <button type="button" :title="t('subCard.convert')" @click="emit('open', sub)">
             <Icon name="convert" :size="16" />
           </button>
-          <button type="button" title="Edit" @click="emit('edit', sub)">
+          <button type="button" :title="t('common.edit')" @click="emit('edit', sub)">
             <Icon name="edit" :size="16" />
           </button>
-          <button type="button" class="danger" title="Delete" @click="emit('remove', sub)">
+          <button type="button" class="danger" :title="t('common.delete')" @click="emit('remove', sub)">
             <Icon name="trash" :size="16" />
           </button>
           <n-switch

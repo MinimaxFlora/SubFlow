@@ -10,6 +10,7 @@ The repository contains the initial foundation:
 - SQLite schema migrations and repository boundaries.
 - Health, version, settings, and subscription CRUD APIs.
 - Vue 3 + TypeScript + Vite + Naive UI dashboard and subscription management UI.
+- Localized interface in Simplified Chinese, English, and Traditional Chinese.
 - Embedded frontend assets for a standalone Go binary.
 - Multi-stage Docker image and persistent Compose volume.
 - Makefile entry points for development, tests, builds, and release checks.
@@ -35,6 +36,12 @@ make check
 ```
 
 The frontend development server proxies `/api` to `http://127.0.0.1:8080`. Start the backend separately with `go run .` when using the dev server.
+
+## Localization
+
+The interface ships with Simplified Chinese (`zh-CN`), English (`en`), and Traditional Chinese (`zh-TW`). The active language is detected from the browser, can be switched from the language button in the navigation bar or the selector in Settings, and is remembered in `localStorage` (`subflow.locale`).
+
+Message catalogs live in `web/src/locales/` and are resolved by `web/src/i18n.ts`. To add a language, create a catalog with the same keys, register it in `i18n.ts`, and add it to `supportedLocales`.
 
 ## Configuration
 

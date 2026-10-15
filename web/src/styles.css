@@ -293,6 +293,13 @@ code,
   color: var(--comment-text-color);
 }
 
+/* The centered title has limited room on phones; keep only the page name. */
+@media (max-width: 640px) {
+  .nav-bar__title .sub {
+    display: none;
+  }
+}
+
 .nav-bar__leading,
 .nav-bar__trailing {
   position: absolute;

@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { NButton, NInput, NSpin, useMessage } from 'naive-ui'
+import { computed, onMounted, ref } from 'vue'
+import { NButton, NInput, NSelect, NSpin, useMessage } from 'naive-ui'
 import Icon from '@/components/Icon.vue'
 import { api, type VersionInfo } from '@/api/client'
+import { setLocale, supportedLocales, translateError, useI18n, type LocaleCode } from '@/i18n'
 
 const message = useMessage()
+const { locale, t } = useI18n()
 const loading = ref(true)
 const saving = ref(false)
 const version = ref<VersionInfo | null>(null)
@@ -18,6 +20,12 @@ const rows = ref<SettingRow[]>([])
 const newKey = ref('')
 const newValue = ref('')
 
+const localeOptions = supportedLocales.map((item) => ({ label: item.label, value: item.code }))
+const selectedLocale = computed({
+  get: () => locale.value,
+  set: (value: LocaleCode) => setLocale(value),
+})
+
 async function reload() {
   loading.value = true
   try {
@@ -27,7 +35,7 @@ async function reload() {
       .sort((a, b) => a.key.localeCompare(b.key))
     version.value = versionInfo
   } catch (err) {
-    message.error(err instanceof Error ? err.message : String(err))
+    message.error(translateError(err))
   } finally {
     loading.value = false
   }
@@ -36,9 +44,9 @@ async function reload() {
 async function saveRow(row: SettingRow) {
   try {
     await api.updateSettings({ [row.key]: row.value })
-    message.success(`Saved ${row.key}`)
+    message.success(t('settings.msg.saved', { key: row.key }))
   } catch (err) {
-    message.error(err instanceof Error ? err.message : String(err))
+    message.error(translateError(err))
   }
 }
 
@@ -50,7 +58,7 @@ async function clearRow(row: SettingRow) {
 async function addSetting() {
   const key = newKey.value.trim()
   if (!key) {
-    message.warning('Key is required')
+    message.warning(t('settings.msg.keyRequired'))
     return
   }
   saving.value = true
@@ -59,9 +67,9 @@ async function addSetting() {
     newKey.value = ''
     newValue.value = ''
     await reload()
-    message.success('Setting saved')
+    message.success(t('settings.msg.settingSaved'))
   } catch (err) {
-    message.error(err instanceof Error ? err.message : String(err))
+    message.error(translateError(err))
   } finally {
     saving.value = false
   }
@@ -75,57 +83,77 @@ onMounted(reload)
     <n-spin :show="loading">
       <section class="card">
         <div class="card-head">
-          <span class="title"><Icon name="sliders" :size="16" /> Runtime settings</span>
-          <span class="hint">{{ rows.length }} key(s)</span>
+          <span class="title">
+            <Icon name="sliders" :size="16" /> {{ t('settings.title') }}
+          </span>
+          <span class="hint">{{ t('settings.keyCount', { count: rows.length }) }}</span>
         </div>
         <div class="card-body">
           <div v-if="rows.length" class="rows">
             <div v-for="row in rows" :key="row.key" class="setting-row">
               <code class="key">{{ row.key }}</code>
-              <n-input v-model:value="row.value" size="small" placeholder="(empty)" />
+              <n-input
+                v-model:value="row.value"
+                size="small"
+                :placeholder="t('common.emptyValue')"
+              />
               <div class="row-actions">
-                <n-button size="tiny" @click="saveRow(row)">Save</n-button>
-                <n-button size="tiny" quaternary @click="clearRow(row)">Clear</n-button>
+                <n-button size="tiny" @click="saveRow(row)">{{ t('common.save') }}</n-button>
+                <n-button size="tiny" quaternary @click="clearRow(row)">
+                  {{ t('common.clear') }}
+                </n-button>
               </div>
             </div>
           </div>
           <div v-else class="empty compact">
             <span class="empty-icon"><Icon name="sliders" :size="22" /></span>
-            <h3>No settings stored</h3>
-            <p>Key and value pairs are persisted next to your subscriptions and read by the backend at runtime.</p>
+            <h3>{{ t('settings.emptyTitle') }}</h3>
+            <p>{{ t('settings.emptyDescription') }}</p>
           </div>
 
           <div class="add-row">
-            <n-input v-model:value="newKey" size="small" placeholder="key" />
-            <n-input v-model:value="newValue" size="small" placeholder="value" />
-            <n-button size="small" type="primary" :loading="saving" @click="addSetting">Add</n-button>
+            <n-input v-model:value="newKey" size="small" :placeholder="t('settings.keyPlaceholder')" />
+            <n-input
+              v-model:value="newValue"
+              size="small"
+              :placeholder="t('settings.valuePlaceholder')"
+            />
+            <n-button size="small" type="primary" :loading="saving" @click="addSetting">
+              {{ t('common.add') }}
+            </n-button>
           </div>
         </div>
       </section>
 
       <section class="card">
         <div class="card-head">
-          <span class="title"><Icon name="info" :size="16" /> About</span>
+          <span class="title"><Icon name="info" :size="16" /> {{ t('settings.about') }}</span>
         </div>
         <div class="card-body">
           <div class="about-row">
-            <span class="about-label">Version</span>
+            <span class="about-label">{{ t('settings.language') }}</span>
+            <n-select
+              v-model:value="selectedLocale"
+              :options="localeOptions"
+              size="small"
+              style="width: 160px"
+            />
+          </div>
+          <div class="about-row">
+            <span class="about-label">{{ t('settings.version') }}</span>
             <code>{{ version?.version || '-' }}</code>
           </div>
           <div class="about-row">
-            <span class="about-label">Commit</span>
+            <span class="about-label">{{ t('settings.commit') }}</span>
             <code>{{ version?.commit || '-' }}</code>
           </div>
           <div class="about-row">
-            <span class="about-label">Built</span>
+            <span class="about-label">{{ t('settings.built') }}</span>
             <code>{{ version?.buildTime || '-' }}</code>
           </div>
           <div class="note about-note">
             <Icon name="info" :size="15" />
-            <span>
-              SubFlow keeps everything in a single SQLite database and embeds the compiled frontend, so
-              one binary is enough to run it.
-            </span>
+            <span>{{ t('settings.aboutNote') }}</span>
           </div>
         </div>
       </section>
