@@ -49,6 +49,11 @@ func (s *Server) handleResourceCollection(w http.ResponseWriter, r *http.Request
 	segment := r.PathValue("type")
 	kind, ok := pluralKinds[segment]
 	if !ok {
+		// Tokens are created and deleted through the singular /api/token path
+		// the frontend uses, so accept singular item names here as well.
+		kind, ok = itemKinds[segment]
+	}
+	if !ok {
 		if segment == "archives" {
 			// Archive management is not implemented; the collection is empty.
 			restOK(w, []any{})

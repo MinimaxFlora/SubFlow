@@ -1,10 +1,11 @@
 {
-  "name": "Sub-Store",
-  "short_name": "Sub-Store",
-  "description": "A sub-converter running in a Progressive Web App",
+  "name": "SubFlow",
+  "short_name": "SubFlow",
+  "description": "Subscription management, node processing and configuration generation",
   "id": "/",
   "start_url": "/",
   "scope": "/",
+  "lang": "en",
   "display": "standalone",
   "icons": [
     {

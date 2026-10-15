@@ -232,14 +232,12 @@ func rawString(raw json.RawMessage) (string, error) {
 // encodeDocument serialises a document without HTML escaping so stored names
 // and regexes round-trip byte for byte.
 func encodeDocument(body map[string]json.RawMessage) string {
-	var buf strings.Builder
-	enc := json.NewEncoder(&buf)
-	enc.SetEscapeHTML(false)
-	if err := enc.Encode(body); err != nil {
+	encoded, err := marshalNoEscape(body)
+	if err != nil {
 		// Bodies originate from valid JSON, so encoding cannot fail here.
 		return "{}"
 	}
-	return strings.TrimRight(buf.String(), "\n")
+	return string(encoded)
 }
 
 // extractNames accepts either [{"name":...}, ...] or ["name", ...].
