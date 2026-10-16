@@ -1,0 +1,58 @@
+SubFlow
+=======
+
+SubFlow is an independent, self-hosted subscription management platform. It is
+a modified derivative of the Sub-Store project and is distributed under the
+GNU Affero General Public License v3.0 (AGPL-3.0).
+
+Upstream projects
+-----------------
+
+Sub-Store
+  Upstream: https://github.com/sub-store-org/Sub-Store
+  Authors:  Peng-YM and the Sub-Store contributors
+  License:  AGPL-3.0 (backend), GPL-3.0 (frontend)
+
+  The Go backend in this repository is an independent reimplementation of the
+  Sub-Store backend HTTP contract, written from the public Sub-Store source
+  code and API behaviour. The frontend under `web/` is a modified copy of the
+  Sub-Store frontend (baseline v2.34.1).
+
+Modifications of the upstream frontend
+--------------------------------------
+
+  See `web/README.md` for the exact list. In short: rebranding to SubFlow,
+  original SubFlow artwork replacing the upstream icon, same-origin API
+  configuration, and additional interface localization.
+
+Licensing of the combined work
+------------------------------
+
+  The AGPL-3.0 (backend) and the GPL-3.0 (frontend) are compatible with each
+  other, and a combined work that includes both must be conveyed under the
+  terms of the AGPL-3.0. Accordingly, the whole SubFlow project is licensed
+  under the AGPL-3.0; the full text is in `LICENSE`.
+
+  The upstream frontend's own GPL-3.0 license text is preserved verbatim at
+  `web/LICENSE` and must not be removed.
+
+No warranty
+-----------
+
+  This program is distributed in the hope that it will be useful, but WITHOUT
+  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+  FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License
+  for more details.
+
+Trademarks
+----------
+
+  "Sub-Store" refers to the upstream project. SubFlow is not affiliated with,
+  endorsed by, or sponsored by the Sub-Store project or its maintainers. All
+  third-party names and marks belong to their respective owners.
+
+Corresponding source
+--------------------
+
+  The complete corresponding source code for SubFlow is this repository:
+  https://github.com/MinimaxFlora/SubFlow

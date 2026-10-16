@@ -1,40 +1,61 @@
 <div align="center">
 <br>
-<img width="200" src="https://raw.githubusercontent.com/cc63/ICON/main/Sub-Store.png" alt="Sub-Store">
+<img width="200" src="./public/favicon.svg" alt="SubFlow">
 <br>
 <br>
-<h2 align="center">Sub-Store</h2>
+<h2 align="center">SubFlow Web</h2>
 </div>
 
 <p align="center" color="#6a737d">
-Advanced Subscription Manager for QX, Loon, Surge, Stash and ShadowRocket.
+Frontend for SubFlow, a self-hosted subscription management platform.
 </p>
 
-[![Build](https://github.com/Peng-YM/Sub-Store/actions/workflows/main.yml/badge.svg)](https://github.com/Peng-YM/Sub-Store/actions/workflows/main.yml) ![GitHub](https://img.shields.io/github/license/Peng-YM/Sub-Store) ![GitHub issues](https://img.shields.io/github/issues/Peng-YM/Sub-Store) ![GitHub closed pull requests](https://img.shields.io/github/issues-pr-closed-raw/Peng-Ym/Sub-Store) ![Lines of code](https://img.shields.io/tokei/lines/github/Peng-YM/Sub-Store) ![Size](https://img.shields.io/github/languages/code-size/Peng-YM/Sub-Store)
+## Upstream attribution
 
-[!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/PengYM)
+This directory is a modified copy of the frontend of **Sub-Store**, originally
+created by [Peng-YM](https://github.com/Peng-YM) and now maintained by the
+[sub-store-org](https://github.com/sub-store-org/Sub-Store) organization.
 
-Core functionalities:
+- Upstream project: <https://github.com/sub-store-org/Sub-Store>
+- Upstream license: **GNU General Public License v3.0** (see [`LICENSE`](./LICENSE))
+- Baseline version imported here: Sub-Store frontend `v2.34.1`
 
-[Sub-Store](https://github.com/sub-store-org/Sub-Store)
+SubFlow is not affiliated with or endorsed by the Sub-Store project. The
+Sub-Store name and original artwork remain the property of their respective
+owners and are used here only to describe the origin of this code.
 
-### Development
+**Modifications applied in this repository:**
+
+- Rebranded the user-visible product name and metadata from `Sub-Store` to
+  `SubFlow` (locales, manifests, window title, PWA metadata).
+- Replaced the application icon and PWA assets with original SubFlow artwork.
+- Pinned the API base URL to the same origin so the embedded Go backend serves
+  the API under a single host.
+- Localized additional interface strings.
+
+Because the upstream is licensed under the GPL-3.0, this directory and any
+derivative of it **must remain under the GPL-3.0**. The full license text is in
+[`LICENSE`](./LICENSE), and the complete corresponding source for this
+modified version is this repository. See the repository-level
+[`NOTICE`](../NOTICE) for the combined-work licensing of SubFlow.
+
+## Development
 
 #### Guidelines
 
 Commit message follows [@commitlint/config-angular](https://github.com/conventional-changelog/commitlint/tree/master/@commitlint/config-angular)
 
-#### Created in the following version:
+#### Toolchain
 - pnpm v11.0.9 via Corepack
-- Vite v2.9.9
-- Vue v3.2
+- Vite v3
+- Vue v3
 - Pinia v2
-- Typescript v4.6
+- TypeScript v4.9
 
-#### Font Awesome Icon 
-This project is using [Font Awesome](https://fontawesome.com/icons/check?s=regular) icons and this is [Documentation](https://fontawesome.com/docs/web/style/size)
+#### Font Awesome Icon
+This project uses [Font Awesome](https://fontawesome.com/icons) icons.
 
-#### Start 
+#### Start
 ```bash
 # enable the pinned package manager
 corepack enable
@@ -42,24 +63,23 @@ corepack enable
 # install dependencies
 pnpm i
 
-# run the server
+# run the development server
 pnpm dev
 
-# build the app
+# build for production
 pnpm build
 
-# preview the built app
+# preview the production build
 pnpm preview
 ```
 
-## LICENSE
+## License
 
-This project is under the GPL V3 LICENSE.
-
-[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FPeng-YM%2FSub-Store.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2FPeng-YM%2FSub-Store?ref=badge_large)
+This project is distributed under the **GNU General Public License v3.0**.
 
 ## Acknowledgements
 
-- Special thanks to @KOP-XIAO for his awesome resource-parser. Please give
-  a [star](https://github.com/KOP-XIAO/QuantumultX) for his great work!
-- Speicial thanks to @Orz-3 and @58xinian for their awesome icons.
+- [Sub-Store](https://github.com/sub-store-org/Sub-Store) and [Peng-YM](https://github.com/Peng-YM) for the original frontend.
+- Special thanks to @KOP-XIAO for the resource-parser. Please give a
+  [star](https://github.com/KOP-XIAO/QuantumultX).
+- Special thanks to @Orz-3 and @58xinian for their icons.
