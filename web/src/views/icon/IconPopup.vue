@@ -92,12 +92,12 @@
         </div>
         <div v-else-if="fetchStatus === 'error'" class="icon-state-wrapper">
           <div class="icon-state">
-            <nut-empty image="error" class="icon-empty">
+            <EmptyState image="error" class="icon-empty">
               <template #description>
                 <h3>{{ $t(`iconCollectionPage.loadFailedTitle`) }}</h3>
                 <p>{{ $t(`iconCollectionPage.loadFailedDesc`) }}</p>
               </template>
-            </nut-empty>
+            </EmptyState>
             <nut-button
               icon="refresh"
               type="primary"
@@ -137,12 +137,12 @@
           </div>
         </div>
         <div v-else class="icon-state-wrapper">
-          <nut-empty image="empty">
+          <EmptyState image="empty">
             <template #description>
               <h3>{{ $t(`iconCollectionPage.emptyCollectionTitle`) }}</h3>
               <p>{{ $t(`iconCollectionPage.emptyCollectionDesc`) }}</p>
             </template>
-          </nut-empty>
+          </EmptyState>
         </div>
       </div>
     </div>
@@ -161,6 +161,7 @@
 
 <script setup lang="ts">
 import DesktopPicker from "@/components/DesktopPicker.vue";
+import EmptyState from "@/components/EmptyState.vue";
 import { Toast } from "@nutui/nutui";
 import { useDebounceFn, useVirtualList } from "@vueuse/core";
 import axios from "axios";

@@ -358,12 +358,12 @@
     </div>
     <!-- 没有数据 -->
     <div v-if="!isLoading && fetchResult && !hasShares" class="empty-state-wrapper">
-      <nut-empty image="empty">
+      <EmptyState image="empty">
         <template #description>
           <h3>{{ $t(`sharePage.emptyShare.title`) }}</h3>
           <p>{{ $t(`sharePage.emptyShare.desc`) }}</p>
         </template>
-      </nut-empty>
+      </EmptyState>
       <nut-button type="primary" @click="addShare">
         {{ $t(`sharePage.emptyShare.btn`) }}
       </nut-button>
@@ -371,7 +371,7 @@
 
     <!-- 数据加载失败 -->
     <div v-if="!isLoading && !fetchResult" class="empty-state-wrapper">
-      <nut-empty image="error" style="padding: 32px 30px">
+      <EmptyState image="error" style="padding: 32px 30px">
         <template #description>
           <h3>{{ $t(`subPage.loadFailed.title`) }}</h3>
           <p>{{ $t(`subPage.loadFailed.desc`) }}</p>
@@ -386,7 +386,7 @@
             </a>
           </p>
         </template>
-      </nut-empty>
+      </EmptyState>
       <nut-button icon="refresh" type="primary" @click="refresh">
         {{ $t(`subPage.loadFailed.btn`) }}
       </nut-button>
@@ -441,6 +441,7 @@ import { computed, onMounted, ref, toRaw, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 import draggable from "vuedraggable";
+import EmptyState from "@/components/EmptyState.vue";
 import ShareListItem from "@/components/ShareListItem.vue";
 import { useShareApi } from "@/api/share";
 import { useBackend } from "@/hooks/useBackend";

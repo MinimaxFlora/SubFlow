@@ -162,12 +162,12 @@
       v-if="!isLoading && fetchResult && artifacts.length === 0"
       class="empty-state-wrapper"
     >
-      <nut-empty image="empty">
+      <EmptyState image="empty">
         <template #description>
           <h3>{{ $t(`syncPage.emptySub.title`) }}</h3>
           <p>{{ $t(`syncPage.emptySub.desc`) }}</p>
         </template>
-      </nut-empty>
+      </EmptyState>
       <nut-button @click="onclickAddArtifact" type="primary">
         {{ $t(`syncPage.emptySub.btn`) }}
       </nut-button>
@@ -175,7 +175,7 @@
 
     <!--数据加载失败-->
     <div v-if="!isLoading && !fetchResult" class="empty-state-wrapper">
-      <nut-empty image="error" style="padding: 32px 30px">
+      <EmptyState image="error" style="padding: 32px 30px">
         <template #description>
           <h3>{{ $t(`subPage.loadFailed.title`) }}</h3>
           <p>{{ $t(`subPage.loadFailed.desc`) }}</p>
@@ -190,7 +190,7 @@
             </a>
           </p>
         </template>
-      </nut-empty>
+      </EmptyState>
       <nut-button icon="refresh" type="primary" @click="refresh">
         {{ $t(`subPage.loadFailed.btn`) }}
       </nut-button>
@@ -207,6 +207,7 @@
 
 <script lang="ts" setup>
 import ArtifactsListItem from "@/components/ArtifactsListItem.vue";
+import EmptyState from "@/components/EmptyState.vue";
 import { useArtifactsStore } from "@/store/artifacts";
 import { storeToRefs } from "pinia";
 import { useGlobalStore } from "@/store/global";

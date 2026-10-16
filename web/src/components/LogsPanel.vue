@@ -159,7 +159,7 @@
           </ul>
         </div>
       </div>
-      <nut-empty
+      <EmptyState
         v-else-if="hasLoadedLogs && logs.length === 0"
         image="empty"
         :description="$t('logsPage.empty')"
@@ -258,6 +258,7 @@
 
 <script lang="ts" setup>
 import { useLogsApi } from "@/api/logs";
+import EmptyState from "@/components/EmptyState.vue";
 import { useGlobalStore } from "@/store/global";
 import { useListViewMode } from "@/hooks/useListViewMode";
 import { useSettingsStore } from "@/store/settings";

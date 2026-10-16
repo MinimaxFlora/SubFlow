@@ -424,12 +424,12 @@
     </div>
 
     <div v-if="!pageLoading && pageFetchResult && !hasEntries" class="empty-state-wrapper">
-      <nut-empty image="empty">
+      <EmptyState image="empty">
         <template #description>
           <h3>{{ $t('archivePage.empty.title') }}</h3>
           <p>{{ $t('archivePage.empty.desc') }}</p>
         </template>
-      </nut-empty>
+      </EmptyState>
       <router-link to="/" class="router-link">
         <nut-button type="primary">
           {{ $t('archivePage.empty.btn') }}
@@ -438,12 +438,12 @@
     </div>
 
     <div v-if="!pageLoading && !pageFetchResult" class="empty-state-wrapper">
-      <nut-empty image="error" style="padding: 32px 30px">
+      <EmptyState image="error" style="padding: 32px 30px">
         <template #description>
           <h3>{{ $t('subPage.loadFailed.title') }}</h3>
           <p>{{ $t('subPage.loadFailed.desc') }}</p>
         </template>
-      </nut-empty>
+      </EmptyState>
       <nut-button icon="refresh" type="primary" @click="init">
         {{ $t('subPage.loadFailed.btn') }}
       </nut-button>
@@ -490,6 +490,7 @@ import { useI18n } from 'vue-i18n';
 import draggable from 'vuedraggable';
 
 import ArchiveListItem from '@/components/ArchiveListItem.vue';
+import EmptyState from '@/components/EmptyState.vue';
 import { useFilteredDraggableList } from '@/hooks/useFilteredDraggableList';
 import { useListViewMode } from '@/hooks/useListViewMode';
 import { useListViewModeSelectionLock } from '@/hooks/useListViewModeSelectionLock';

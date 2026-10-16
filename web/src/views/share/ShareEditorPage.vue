@@ -7,12 +7,12 @@
     </section>
 
     <section v-else-if="hasLoadError" class="link-editor-state">
-      <nut-empty image="error">
+      <EmptyState image="error">
         <template #description>
           <h3>{{ $t("sharePage.editor.loadFailed.title") }}</h3>
           <p>{{ $t("sharePage.editor.loadFailed.desc") }}</p>
         </template>
-      </nut-empty>
+      </EmptyState>
       <div class="link-editor-state-actions">
         <nut-button plain shape="round" @click="loadEditorData">
           {{ $t("sharePage.editor.loadFailed.retry") }}
@@ -441,6 +441,7 @@ import { useQRCode } from "@vueuse/integrations/useQRCode";
 import { storeToRefs } from "pinia";
 import { computed, reactive, ref, watch } from "vue";
 import { copyText } from "@/utils/clipboard";
+import EmptyState from "@/components/EmptyState.vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 

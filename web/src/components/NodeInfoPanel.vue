@@ -33,11 +33,11 @@
         </ul>
         <div v-else-if="props.ipApiStatus === 'error'" class="ip-api-state">
           <strong class="node-name">{{ props.nodeInfo.name }}</strong>
-          <nut-empty image="error" class="ip-api-empty">
+          <EmptyState image="error" class="ip-api-empty">
             <template #description>
               <h3>{{ $t('comparePage.nodeInfo.ipApi.loadFailed') }}</h3>
             </template>
-          </nut-empty>
+          </EmptyState>
           <nut-button
             icon="refresh"
             type="primary"
@@ -73,6 +73,7 @@
 
 <script lang="ts" setup>
   import { useCodeStore } from '@/store/codeStore';
+  import EmptyState from '@/components/EmptyState.vue';
   import cmView from '@/views/editCode/cmView.vue';
   import { useQRCode } from '@vueuse/integrations/useQRCode';
   import { computed, ref } from 'vue';
