@@ -52,8 +52,20 @@ build: backend
 
 build-all: frontend
 	@mkdir -p $(DIST_DIR)
-	GOOS=linux GOARCH=amd64 $(GO) build -trimpath -ldflags "$(LDFLAGS)" -o $(DIST_DIR)/$(APP)-linux-amd64 .
-	GOOS=linux GOARCH=arm64 $(GO) build -trimpath -ldflags "$(LDFLAGS)" -o $(DIST_DIR)/$(APP)-linux-arm64 .
+	@set -e; \
+	for t in linux-386 linux-amd64 linux-arm64 linux-armv5 linux-armv6 linux-armv7 linux-s390x darwin-amd64 darwin-arm64 windows-amd64; do \
+		os=$${t%%-*}; variant=$${t#*-}; \
+		case $$variant in \
+			armv5) arch=arm; goarm=5 ;; \
+			armv6) arch=arm; goarm=6 ;; \
+			armv7) arch=arm; goarm=7 ;; \
+			*) arch=$$variant; goarm= ;; \
+		esac; \
+		ext=""; [ "$$os" = windows ] && ext=".exe"; \
+		printf 'Building %s\n' "$$t"; \
+		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch GOARM=$$goarm \
+			$(GO) build -trimpath -ldflags "$(LDFLAGS)" -o $(DIST_DIR)/$(APP)-$$t$$ext . ; \
+	done
 
 test:
 	$(GO) test ./...

@@ -17,17 +17,22 @@ permissions:
 
 jobs:
   binaries:
-    name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
+    name: Build ${{ matrix.name }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { goos: linux, goarch: amd64 }
-          - { goos: linux, goarch: arm64 }
-          - { goos: darwin, goarch: amd64 }
-          - { goos: darwin, goarch: arm64 }
-          - { goos: windows, goarch: amd64 }
+          - { name: linux-386, goos: linux, goarch: 386 }
+          - { name: linux-amd64, goos: linux, goarch: amd64 }
+          - { name: linux-arm64, goos: linux, goarch: arm64 }
+          - { name: linux-armv5, goos: linux, goarch: arm, goarm: "5" }
+          - { name: linux-armv6, goos: linux, goarch: arm, goarm: "6" }
+          - { name: linux-armv7, goos: linux, goarch: arm, goarm: "7" }
+          - { name: linux-s390x, goos: linux, goarch: s390x }
+          - { name: darwin-amd64, goos: darwin, goarch: amd64 }
+          - { name: darwin-arm64, goos: darwin, goarch: arm64 }
+          - { name: windows-amd64, goos: windows, goarch: amd64 }
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -79,6 +84,7 @@ jobs:
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
+          GOARM: ${{ matrix.goarm }}
           CGO_ENABLED: "0"
         run: |
           ext=""
@@ -89,22 +95,22 @@ jobs:
             -X github.com/subflow-org/subflow/internal/version.BuildTime=${{ steps.meta.outputs.build_time }}"
           mkdir -p dist
           go build -trimpath -ldflags "$ldflags" \
-            -o "dist/subflow-${{ matrix.goos }}-${{ matrix.goarch }}${ext}" .
+            -o "dist/subflow-${{ matrix.name }}${ext}" .
 
       - name: Package archive
         shell: bash
         run: |
-          name="subflow-${{ matrix.goos }}-${{ matrix.goarch }}"
+          name="subflow-${{ matrix.name }}"
           if [ "${{ matrix.goos }}" = "windows" ]; then
-            (cd dist && zip -q "${name}.zip" "${name}.exe")
+            (cd dist && zip -q "${name}.zip" "subflow-${{ matrix.name }}.exe")
           else
-            (cd dist && tar -czf "${name}.tar.gz" "${name}")
+            (cd dist && tar -czf "${name}.tar.gz" "subflow-${{ matrix.name }}")
           fi
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: subflow-${{ matrix.goos }}-${{ matrix.goarch }}
+          name: subflow-${{ matrix.name }}
           path: |
             dist/*.tar.gz
             dist/*.zip
@@ -175,13 +181,12 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
             type=ref,event=branch
-            type=sha
 
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: .
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/386,linux/amd64,linux/arm64,linux/arm/v6,linux/arm/v7,linux/s390x
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

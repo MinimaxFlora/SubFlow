@@ -1,5 +1,7 @@
-# Frontend and Go build stage.
-FROM node:22-alpine AS frontend
+# Build stages run on the native build platform and cross-compile to
+# TARGETPLATFORM, so an exotic target only needs a matching runtime base image
+# rather than a node/golang image for every architecture.
+FROM --platform=$BUILDPLATFORM node:22-alpine AS frontend
 WORKDIR /src/web
 # pnpm-workspace.yaml and .npmrc carry the dependency build allowlist, so the
 # frozen install succeeds instead of aborting with ignored build scripts.
@@ -8,7 +10,10 @@ RUN corepack enable && pnpm install --frozen-lockfile
 COPY web/ ./
 RUN pnpm run build
 
-FROM golang:1.27-alpine AS backend
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS backend
+ARG TARGETOS
+ARG TARGETARCH
+ARG TARGETVARIANT
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
@@ -17,7 +22,11 @@ COPY --from=frontend /src/web/dist ./web/dist
 ARG VERSION=dev
 ARG COMMIT=none
 ARG BUILD_TIME=unknown
-RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X github.com/subflow-org/subflow/internal/version.Version=${VERSION} -X github.com/subflow-org/subflow/internal/version.Commit=${COMMIT} -X github.com/subflow-org/subflow/internal/version.BuildTime=${BUILD_TIME}" -o /out/subflow .
+RUN set -eux; \
+    goarm=""; \
+    if [ "${TARGETARCH}" = "arm" ] && [ -n "${TARGETVARIANT}" ]; then goarm="${TARGETVARIANT#v}"; fi; \
+    CGO_ENABLED=0 GOOS="${TARGETOS}" GOARCH="${TARGETARCH}" GOARM="${goarm}" \
+    go build -trimpath -ldflags "-s -w -X github.com/subflow-org/subflow/internal/version.Version=${VERSION} -X github.com/subflow-org/subflow/internal/version.Commit=${COMMIT} -X github.com/subflow-org/subflow/internal/version.BuildTime=${BUILD_TIME}" -o /out/subflow .
 
 # Minimal non-root runtime.
 FROM alpine:3.21
