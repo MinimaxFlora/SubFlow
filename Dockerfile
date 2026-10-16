@@ -1,7 +1,9 @@
 # Frontend and Go build stage.
 FROM node:22-alpine AS frontend
 WORKDIR /src/web
-COPY web/package.json web/pnpm-lock.yaml ./
+# pnpm-workspace.yaml and .npmrc carry the dependency build allowlist, so the
+# frozen install succeeds instead of aborting with ignored build scripts.
+COPY web/package.json web/pnpm-lock.yaml web/pnpm-workspace.yaml web/.npmrc ./
 RUN corepack enable && pnpm install --frozen-lockfile
 COPY web/ ./
 RUN pnpm run build
