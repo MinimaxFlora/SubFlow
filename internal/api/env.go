@@ -38,7 +38,7 @@ func (s *Server) handleUtilEnv(w http.ResponseWriter, _ *http.Request) {
 		ver = "dev"
 	}
 
-	restOK(w, envPayload{
+	restSuccess(w, envPayload{
 		Backend:       "SubFlow",
 		Version:       ver,
 		HasNewVersion: false,
@@ -58,7 +58,7 @@ func (s *Server) handleUtilEnv(w http.ResponseWriter, _ *http.Request) {
 // handleUtilRefresh clears the cached environment so the frontend refetches it.
 // SubFlow keeps no server-side env cache, so this is a successful no-op.
 func (s *Server) handleUtilRefresh(w http.ResponseWriter, _ *http.Request) {
-	restOK(w, map[string]any{})
+	restSuccess(w, map[string]any{})
 }
 
 // nodeInfoRequest is the subset of a proxy node needed to look it up.
@@ -76,7 +76,8 @@ func (s *Server) handleNodeInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Server == "" {
-		restBadRequest(w, "MISSING_SERVER", "节点缺少 server 字段")
+		restFailed(w, errStatusDefault, "FAILED_TO_GET_NODE_INFO", errTypeNetwork,
+			"Failed to get node info", "Reason: node server is required")
 		return
 	}
 
@@ -88,7 +89,7 @@ func (s *Server) handleNodeInfo(w http.ResponseWriter, r *http.Request) {
 		resolved = ips[0]
 	}
 
-	restOK(w, map[string]any{
+	restSuccess(w, map[string]any{
 		"shareUrl": "",
 		"info": map[string]any{
 			"query":  resolved,

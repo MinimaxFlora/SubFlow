@@ -127,20 +127,45 @@ func TestResourceCRUD(t *testing.T) {
 	base := ts.URL + "/api"
 
 	cases := []struct {
-		create string
-		item   string
-		doc    map[string]any
+		create        string
+		item          string
+		doc           map[string]any
+		missingStatus int
+		missingIsText bool
 	}{
-		{"/subs", "/sub/alpha", map[string]any{"name": "alpha", "source": "local", "content": testNodes}},
-		{"/collections", "/collection/alpha", map[string]any{"name": "alpha", "subscriptions": []string{}}},
-		{"/files", "/file/alpha", map[string]any{"name": "alpha", "content": testNodes}},
-		{"/artifacts", "/artifact/alpha", map[string]any{"name": "alpha", "type": "clash"}},
+		// Subscriptions and collections report a missing item with the default
+		// 500 status, matching Sub-Store's failed() behaviour.
+		{"/subs", "/sub/alpha", map[string]any{"name": "alpha", "source": "local", "content": testNodes}, http.StatusInternalServerError, false},
+		{"/collections", "/collection/alpha", map[string]any{"name": "alpha", "subscriptions": []string{}}, http.StatusInternalServerError, false},
+		// GET /api/file/{name} returns the produced content as text.
+		{"/files", "/file/alpha", map[string]any{"name": "alpha", "content": testNodes}, http.StatusNotFound, true},
+		{"/artifacts", "/artifact/alpha", map[string]any{"name": "alpha", "type": "clash"}, http.StatusNotFound, false},
 	}
 
 	for _, tc := range cases {
 		status, env, raw := do(t, http.MethodPost, base+tc.create, tc.doc)
-		if status != http.StatusOK || env.Status != "success" {
+		if status != http.StatusCreated || env.Status != "success" {
 			t.Fatalf("create %s: status=%d body=%s", tc.create, status, raw)
+		}
+
+		if tc.missingIsText {
+			// The file endpoint serves text; skip the JSON envelope checks.
+			status, _, raw = do(t, http.MethodPatch, base+tc.item, map[string]any{"displayName": "Renamed"})
+			if status != http.StatusOK || env.Status != "success" {
+				t.Fatalf("patch %s: status=%d body=%s", tc.item, status, raw)
+			}
+			if status, _, raw = do(t, http.MethodGet, base+tc.item, nil); status != http.StatusOK || !strings.Contains(raw, "vless://") {
+				t.Fatalf("file content %s: status=%d body=%s", tc.item, status, raw)
+			}
+			status, _, raw = do(t, http.MethodGet, base+tc.item+"-missing", nil)
+			if status != tc.missingStatus {
+				t.Fatalf("missing %s: status=%d body=%s", tc.item, status, raw)
+			}
+			status, _, raw = do(t, http.MethodDelete, base+tc.item, nil)
+			if status != http.StatusOK {
+				t.Fatalf("delete %s: status=%d body=%s", tc.item, status, raw)
+			}
+			continue
 		}
 
 		status, env, raw = do(t, http.MethodGet, base+tc.item, nil)
@@ -149,7 +174,7 @@ func TestResourceCRUD(t *testing.T) {
 		}
 
 		status, _, raw = do(t, http.MethodGet, base+tc.item+"-missing", nil)
-		if status != http.StatusNotFound {
+		if status != tc.missingStatus {
 			t.Fatalf("missing %s: status=%d body=%s", tc.item, status, raw)
 		}
 
@@ -168,11 +193,11 @@ func TestResourceCRUD(t *testing.T) {
 func TestDuplicateNameConflicts(t *testing.T) {
 	ts := newTestServer(t)
 	doc := map[string]any{"name": "dup", "source": "local", "content": testNodes}
-	if status, _, raw := do(t, http.MethodPost, ts.URL+"/api/subs", doc); status != http.StatusOK {
+	if status, _, raw := do(t, http.MethodPost, ts.URL+"/api/subs", doc); status != http.StatusCreated {
 		t.Fatalf("first create: %d %s", status, raw)
 	}
 	status, env, raw := do(t, http.MethodPost, ts.URL+"/api/subs", doc)
-	if status != http.StatusConflict || env.Error == nil || env.Error.Code != "CONFLICT" {
+	if status != http.StatusInternalServerError || env.Error == nil || env.Error.Code != "DUPLICATE_KEY" || env.Error.Type != "RequestInvalidError" {
 		t.Fatalf("duplicate create: status=%d body=%s", status, raw)
 	}
 }
@@ -214,7 +239,7 @@ func TestPreviewAppliesProcessors(t *testing.T) {
 func TestDownloadsForEveryTarget(t *testing.T) {
 	ts := newTestServer(t)
 	doc := map[string]any{"name": "dl", "source": "local", "content": testNodes}
-	if status, _, raw := do(t, http.MethodPost, ts.URL+"/api/subs", doc); status != http.StatusOK {
+	if status, _, raw := do(t, http.MethodPost, ts.URL+"/api/subs", doc); status != http.StatusCreated {
 		t.Fatalf("create: %d %s", status, raw)
 	}
 
@@ -229,8 +254,8 @@ func TestDownloadsForEveryTarget(t *testing.T) {
 	}
 
 	status, _, _ := do(t, http.MethodGet, ts.URL+"/download/dl?target=nope", nil)
-	if status != http.StatusBadRequest {
-		t.Fatalf("unknown target status = %d, want 400", status)
+	if status != http.StatusInternalServerError {
+		t.Fatalf("unknown target status = %d, want 500", status)
 	}
 	status, _, _ = do(t, http.MethodGet, ts.URL+"/download/missing", nil)
 	if status != http.StatusNotFound {
@@ -286,7 +311,7 @@ func TestSettingsAndStorageRoundTrip(t *testing.T) {
 func TestStorageImportReplacesStoreAndAcceptsBase64(t *testing.T) {
 	ts := newTestServer(t)
 	doc := map[string]any{"name": "keep", "source": "local", "content": testNodes}
-	if status, _, raw := do(t, http.MethodPost, ts.URL+"/api/subs", doc); status != http.StatusOK {
+	if status, _, raw := do(t, http.MethodPost, ts.URL+"/api/subs", doc); status != http.StatusCreated {
 		t.Fatalf("create sub: %d %s", status, raw)
 	}
 
@@ -325,7 +350,7 @@ func TestStorageImportReplacesStoreAndAcceptsBase64(t *testing.T) {
 func TestStorageImportRejectsBackupWithoutSettings(t *testing.T) {
 	ts := newTestServer(t)
 	status, env, raw := do(t, http.MethodPost, ts.URL+"/api/storage", map[string]any{"content": `{"subs":{}}`})
-	if status != http.StatusBadRequest || env.Error == nil || env.Error.Code != "INVALID_BACKUP_DATA" {
+	if status != http.StatusInternalServerError || env.Error == nil || env.Error.Code != "INVALID_BACKUP_DATA" || env.Error.Type != "RequestInvalidError" {
 		t.Fatalf("expected INVALID_BACKUP_DATA, got %d %s", status, raw)
 	}
 }
@@ -411,7 +436,7 @@ func TestRemoteSubscriptionFetchAndConvert(t *testing.T) {
 
 	ts := newTestServer(t)
 	doc := map[string]any{"name": "remote", "source": "remote", "url": upstream.URL}
-	if status, _, raw := do(t, http.MethodPost, ts.URL+"/api/subs", doc); status != http.StatusOK {
+	if status, _, raw := do(t, http.MethodPost, ts.URL+"/api/subs", doc); status != http.StatusCreated {
 		t.Fatalf("create remote: %d %s", status, raw)
 	}
 

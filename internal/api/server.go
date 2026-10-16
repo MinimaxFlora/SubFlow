@@ -62,9 +62,9 @@ func New(deps Deps) *Server {
 	mux.HandleFunc("GET /api/utils/env", s.handleUtilEnv)
 	mux.HandleFunc("GET /api/utils/refresh", s.handleUtilRefresh)
 	mux.HandleFunc("POST /api/utils/node-info", s.handleNodeInfo)
-	mux.HandleFunc("GET /api/utils/backup", s.handleNotImplemented("Gist 备份与同步"))
-	mux.HandleFunc("POST /api/utils/age/key-pair", s.handleNotImplemented("age 密钥生成"))
-	mux.HandleFunc("POST /api/utils/age/public-key", s.handleNotImplemented("age 公钥推导"))
+	mux.HandleFunc("GET /api/utils/backup", s.handleNotImplemented("Gist backup and sync"))
+	mux.HandleFunc("POST /api/utils/age/key-pair", s.handleNotImplemented("age key generation"))
+	mux.HandleFunc("POST /api/utils/age/public-key", s.handleNotImplemented("age public key derivation"))
 
 	mux.HandleFunc("GET /api/settings", s.handleSettingsGet)
 	mux.HandleFunc("PATCH /api/settings", s.handleSettingsPatch)
@@ -75,14 +75,14 @@ func New(deps Deps) *Server {
 	mux.HandleFunc("POST /api/sort/{type}", s.handleSortResource)
 	mux.HandleFunc("GET /api/sub/flow/{name}", s.handleSubFlowRoute)
 
-	mux.HandleFunc("GET /api/sync/artifact/{name}", s.handleNotImplemented("订阅同步"))
-	mux.HandleFunc("GET /api/sync/artifacts", s.handleNotImplemented("订阅同步"))
-	mux.HandleFunc("GET /api/artifacts/restore", s.handleNotImplemented("订阅同步"))
+	mux.HandleFunc("GET /api/sync/artifact/{name}", s.handleNotImplemented("artifact sync"))
+	mux.HandleFunc("GET /api/sync/artifacts", s.handleNotImplemented("artifact sync"))
+	mux.HandleFunc("GET /api/artifacts/restore", s.handleNotImplemented("artifact sync"))
 
 	mux.HandleFunc("GET /api/logs", s.handleLogsList)
 	mux.HandleFunc("DELETE /api/logs", s.handleLogsClear)
-	mux.HandleFunc("DELETE /api/archives/{id}", s.handleNotImplemented("归档管理"))
-	mux.HandleFunc("POST /api/archives/{id}/restore", s.handleNotImplemented("归档恢复"))
+	mux.HandleFunc("DELETE /api/archives/{id}", s.handleNotImplemented("archive management"))
+	mux.HandleFunc("POST /api/archives/{id}/restore", s.handleNotImplemented("archive restore"))
 
 	mux.HandleFunc("GET /download/collection/{name}", s.handleDownloadCollection)
 	mux.HandleFunc("GET /download/{name}", s.handleDownloadSub)

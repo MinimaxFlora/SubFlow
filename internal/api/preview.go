@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -43,6 +44,8 @@ type collectionDocument struct {
 type fileDocument struct {
 	Name    string        `json:"name"`
 	Content string        `json:"content"`
+	URL     string        `json:"url"`
+	Source  string        `json:"source"`
 	Process []processStep `json:"process"`
 }
 
@@ -58,7 +61,7 @@ func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request, typeParam
 
 	original, process, err := s.resolveDocument(r.Context(), typeParam, raw, map[string]bool{})
 	if err != nil {
-		restBadRequest(w, "PREVIEW_FAILED", err.Error())
+		restInternalError(w, "INTERNAL_SERVER_ERROR", "Failed to preview "+previewSubject(typeParam), err.Error())
 		return
 	}
 
@@ -69,16 +72,29 @@ func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request, typeParam
 		if len(ops) > 0 {
 			processed, err = proxy.ApplyOperations(original, ops)
 			if err != nil {
-				restBadRequest(w, "PREVIEW_FAILED", err.Error())
+				restInternalError(w, "INTERNAL_SERVER_ERROR", "Failed to preview "+previewSubject(typeParam), err.Error())
 				return
 			}
 		}
 	}
 
-	restOK(w, map[string]any{
+	restSuccess(w, map[string]any{
 		"original":  toPreviewNodes(original),
 		"processed": toPreviewNodes(processed),
 	})
+}
+
+// previewSubject names the document a preview request targets, matching the
+// wording of Sub-Store's preview error messages.
+func previewSubject(typeParam string) string {
+	switch typeParam {
+	case "collection", "collections":
+		return "collection"
+	case "file", "files":
+		return "file"
+	default:
+		return "subscription"
+	}
 }
 
 // handleDownload renders a stored subscription, collection or file into the
@@ -88,12 +104,12 @@ func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request, typeParam
 func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request, kind, name string) {
 	doc, err := s.deps.Resources.Get(r.Context(), kind, name)
 	if err == storage.ErrResourceNotFound {
-		restNotFound(w, "资源不存在")
+		restNotFound(w, "RESOURCE_NOT_FOUND", fmt.Sprintf("%s %s does not exist!", resourceLabel(kind), name))
 		return
 	}
 	if err != nil {
 		s.logError("load download source", err, "kind", kind, "name", name)
-		restInternal(w, "读取数据失败")
+		restInternalError(w, "INTERNAL_SERVER_ERROR", downloadFailure(kind, name), err.Error())
 		return
 	}
 
@@ -103,13 +119,13 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request, kind, na
 		target = "base64"
 	}
 	if !proxy.IsPlatform(target) {
-		restBadRequest(w, "UNKNOWN_PLATFORM", "不支持的目标平台: "+target)
+		restInternalError(w, "INTERNAL_SERVER_ERROR", downloadFailure(kind, name), "unsupported target platform: "+target)
 		return
 	}
 
 	nodes, process, err := s.resolveDocument(r.Context(), kind, json.RawMessage(doc.Data), map[string]bool{})
 	if err != nil {
-		restBadRequest(w, "CONVERT_FAILED", err.Error())
+		restInternalError(w, "INTERNAL_SERVER_ERROR", downloadFailure(kind, name), err.Error())
 		return
 	}
 
@@ -119,7 +135,7 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request, kind, na
 		if len(ops) > 0 {
 			nodes, err = proxy.ApplyOperations(nodes, ops)
 			if err != nil {
-				restBadRequest(w, "CONVERT_FAILED", err.Error())
+				restInternalError(w, "INTERNAL_SERVER_ERROR", downloadFailure(kind, name), err.Error())
 				return
 			}
 		}
@@ -128,7 +144,7 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request, kind, na
 	includeUnsupported := query.Get("includeUnsupportedProxy") != ""
 	output, err := proxy.Produce(nodes, target, proxy.Options{IncludeUnsupported: includeUnsupported})
 	if err != nil {
-		restBadRequest(w, "CONVERT_FAILED", err.Error())
+		restInternalError(w, "INTERNAL_SERVER_ERROR", downloadFailure(kind, name), err.Error())
 		return
 	}
 
@@ -139,6 +155,68 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request, kind, na
 	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=%q", name+"."+platformExtension(target)))
 	_, _ = w.Write([]byte(output))
+}
+
+// downloadFailure is the message Sub-Store returns when producing a download
+// fails.
+func downloadFailure(kind, name string) string {
+	switch kind {
+	case storage.KindCollection:
+		return "Failed to download collection: " + name
+	case storage.KindFile:
+		return "Failed to download file: " + name
+	default:
+		return "Failed to download subscription: " + name
+	}
+}
+
+// handleFileDownload serves GET /api/file/{name}, returning a file's content so
+// it can be referenced from mihomo configs and other files.
+func (s *Server) handleFileDownload(w http.ResponseWriter, r *http.Request, name string) {
+	doc, err := s.deps.Resources.Get(r.Context(), storage.KindFile, name)
+	if errors.Is(err, storage.ErrResourceNotFound) {
+		restNotFound(w, "RESOURCE_NOT_FOUND", fmt.Sprintf("File %s does not exist!", name))
+		return
+	}
+	if err != nil {
+		s.logError("load file", err, "name", name)
+		restInternalError(w, "INTERNAL_SERVER_ERROR", downloadFailure(storage.KindFile, name), err.Error())
+		return
+	}
+
+	var file fileDocument
+	if err := json.Unmarshal([]byte(doc.Data), &file); err != nil {
+		restInternalError(w, "INTERNAL_SERVER_ERROR", downloadFailure(storage.KindFile, name), err.Error())
+		return
+	}
+
+	content, err := s.resolveFileContent(r.Context(), file)
+	if err != nil {
+		restInternalError(w, "INTERNAL_SERVER_ERROR", downloadFailure(storage.KindFile, name), err.Error())
+		return
+	}
+	if len(file.Process) > 0 {
+		s.logSkippedProcessors(storage.KindFile, []string{"processors on file downloads"})
+	}
+
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	_, _ = w.Write([]byte(content))
+}
+
+// resolveFileContent returns a file's body, fetching it when the file points at
+// a remote URL.
+func (s *Server) resolveFileContent(ctx context.Context, file fileDocument) (string, error) {
+	if file.Source == "local" || file.URL == "" {
+		return file.Content, nil
+	}
+	if s.deps.Fetcher == nil {
+		return "", errors.New("no fetcher configured; cannot fetch remote file")
+	}
+	result, err := s.deps.Fetcher.Get(ctx, file.URL, "")
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch file: %w", err)
+	}
+	return result.Content, nil
 }
 
 // resolveDocument turns a stored document into parsed proxy nodes plus the
@@ -153,7 +231,7 @@ func (s *Server) resolveDocument(
 	case "sub", "subs":
 		var doc subDocument
 		if err := json.Unmarshal(raw, &doc); err != nil {
-			return nil, nil, fmt.Errorf("订阅数据格式不正确")
+			return nil, nil, errors.New("invalid subscription data")
 		}
 		content, err := s.subscriptionContent(ctx, doc)
 		if err != nil {
@@ -168,17 +246,17 @@ func (s *Server) resolveDocument(
 	case "collection", "collections":
 		var doc collectionDocument
 		if err := json.Unmarshal(raw, &doc); err != nil {
-			return nil, nil, fmt.Errorf("组合订阅数据格式不正确")
+			return nil, nil, errors.New("invalid collection data")
 		}
 		var nodes []proxy.Node
 		for _, member := range doc.Subscriptions {
 			if seen[member] {
-				return nil, nil, fmt.Errorf("组合订阅存在循环引用: %s", member)
+				return nil, nil, fmt.Errorf("collection has a circular reference: %s", member)
 			}
 			seen[member] = true
 			memberDoc, err := s.deps.Resources.Get(ctx, storage.KindSub, member)
 			if err != nil {
-				return nil, nil, fmt.Errorf("组合订阅引用的 %s 不存在", member)
+				return nil, nil, fmt.Errorf("collection references missing subscription %s", member)
 			}
 			memberNodes, _, err := s.resolveDocument(ctx, "sub", json.RawMessage(memberDoc.Data), seen)
 			if err != nil {
@@ -191,7 +269,7 @@ func (s *Server) resolveDocument(
 	case "file", "files":
 		var doc fileDocument
 		if err := json.Unmarshal(raw, &doc); err != nil {
-			return nil, nil, fmt.Errorf("文件数据格式不正确")
+			return nil, nil, errors.New("invalid file data")
 		}
 		nodes, err := proxy.ParseSubscription(doc.Content)
 		if err != nil {
@@ -200,7 +278,7 @@ func (s *Server) resolveDocument(
 		return nodes, doc.Process, nil
 
 	default:
-		return nil, nil, fmt.Errorf("不支持的资源类型: %s", kind)
+		return nil, nil, fmt.Errorf("unsupported resource type: %s", kind)
 	}
 }
 
@@ -211,11 +289,11 @@ func (s *Server) subscriptionContent(ctx context.Context, doc subDocument) (stri
 		return doc.Content, nil
 	}
 	if s.deps.Fetcher == nil {
-		return "", fmt.Errorf("服务器未配置抓取器，无法获取远程订阅")
+		return "", errors.New("no fetcher configured; cannot fetch remote subscription")
 	}
 	result, err := s.deps.Fetcher.Get(ctx, doc.URL, doc.UA)
 	if err != nil {
-		return "", fmt.Errorf("获取订阅失败: %w", err)
+		return "", fmt.Errorf("failed to fetch subscription: %w", err)
 	}
 	return result.Content, nil
 }

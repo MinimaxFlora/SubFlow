@@ -17,15 +17,15 @@ const settingsDocument = "global"
 func (s *Server) handleSettingsGet(w http.ResponseWriter, r *http.Request) {
 	doc, err := s.deps.Resources.Get(r.Context(), storage.KindSettings, settingsDocument)
 	if errors.Is(err, storage.ErrResourceNotFound) {
-		restOK(w, map[string]any{})
+		restSuccess(w, map[string]any{})
 		return
 	}
 	if err != nil {
 		s.logError("get settings", err)
-		restInternal(w, "读取配置失败")
+		restInternalError(w, "FAILED_TO_GET_SETTINGS", "Failed to get settings", err.Error())
 		return
 	}
-	restOK(w, json.RawMessage(doc.Data))
+	restSuccess(w, json.RawMessage(doc.Data))
 }
 
 // handleSettingsPatch merges the supplied keys into the stored settings.
@@ -39,12 +39,12 @@ func (s *Server) handleSettingsPatch(w http.ResponseWriter, r *http.Request) {
 	if doc, err := s.deps.Resources.Get(r.Context(), storage.KindSettings, settingsDocument); err == nil {
 		if err := json.Unmarshal([]byte(doc.Data), &merged); err != nil {
 			s.logError("decode stored settings", err)
-			restInternal(w, "配置数据损坏")
+			restInternalError(w, "FAILED_TO_UPDATE_SETTINGS", "Failed to update settings", err.Error())
 			return
 		}
 	} else if !errors.Is(err, storage.ErrResourceNotFound) {
 		s.logError("get settings for update", err)
-		restInternal(w, "读取配置失败")
+		restInternalError(w, "FAILED_TO_UPDATE_SETTINGS", "Failed to update settings", err.Error())
 		return
 	}
 
@@ -54,10 +54,10 @@ func (s *Server) handleSettingsPatch(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.deps.Resources.Put(r.Context(), storage.KindSettings, settingsDocument, encodeDocument(merged)); err != nil {
 		s.logError("update settings", err)
-		restInternal(w, "保存配置失败")
+		restInternalError(w, "FAILED_TO_UPDATE_SETTINGS", "Failed to update settings", err.Error())
 		return
 	}
-	restOK(w, map[string]any{})
+	restSuccess(w, json.RawMessage(encodeDocument(merged)))
 }
 
 // handleStorageExport returns a portable snapshot of every stored document. The
@@ -71,7 +71,7 @@ func (s *Server) handleStorageExport(w http.ResponseWriter, r *http.Request) {
 		docs, err := s.deps.Resources.List(r.Context(), collection.Kind)
 		if err != nil {
 			s.logError("export resources", err, "kind", collection.Kind)
-			restInternal(w, "导出数据失败")
+			restInternalError(w, "FAILED_TO_EXPORT_DATA", "Failed to export data", err.Error())
 			return
 		}
 		items := map[string]json.RawMessage{}
@@ -81,7 +81,7 @@ func (s *Server) handleStorageExport(w http.ResponseWriter, r *http.Request) {
 		encoded, err := marshalNoEscape(items)
 		if err != nil {
 			s.logError("encode export section", err, "kind", collection.Kind)
-			restInternal(w, "导出数据失败")
+			restInternalError(w, "FAILED_TO_EXPORT_DATA", "Failed to export data", err.Error())
 			return
 		}
 		snapshot[collection.Segment] = encoded
@@ -98,7 +98,7 @@ func (s *Server) handleStorageExport(w http.ResponseWriter, r *http.Request) {
 	body, err := marshalNoEscape(snapshot)
 	if err != nil {
 		s.logError("encode storage export", err)
-		restInternal(w, "导出数据失败")
+		restInternalError(w, "FAILED_TO_EXPORT_DATA", "Failed to export data", err.Error())
 		return
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -118,18 +118,18 @@ func (s *Server) handleStorageImport(w http.ResponseWriter, r *http.Request) {
 
 	snapshot, err := storageSnapshot(body)
 	if err != nil {
-		restBadRequest(w, "INVALID_BACKUP_DATA", "备份文件校验失败, 无法还原")
+		restInvalidBackup(w, err)
 		return
 	}
 
 	settingsRaw, ok := snapshot["settings"]
 	if !ok {
-		restBadRequest(w, "INVALID_BACKUP_DATA", "备份文件应该至少包含 settings 字段")
+		restInvalidBackup(w, errors.New("backup must contain a settings field"))
 		return
 	}
 	var settings map[string]json.RawMessage
 	if err := json.Unmarshal(settingsRaw, &settings); err != nil {
-		restBadRequest(w, "INVALID_BACKUP_DATA", "settings 字段格式不正确")
+		restInvalidBackup(w, err)
 		return
 	}
 
@@ -139,13 +139,13 @@ func (s *Server) handleStorageImport(w http.ResponseWriter, r *http.Request) {
 		existing, err := s.deps.Resources.List(r.Context(), collection.Kind)
 		if err != nil {
 			s.logError("list before restore", err, "kind", collection.Kind)
-			restInternal(w, "导入数据失败")
+			restInternalError(w, "FAILED_TO_RESTORE_DATA", "Failed to restore data", err.Error())
 			return
 		}
 		for _, doc := range existing {
 			if _, err := s.deps.Resources.Delete(r.Context(), collection.Kind, doc.Name); err != nil {
 				s.logError("clear before restore", err, "kind", collection.Kind, "name", doc.Name)
-				restInternal(w, "导入数据失败")
+				restInternalError(w, "FAILED_TO_RESTORE_DATA", "Failed to restore data", err.Error())
 				return
 			}
 		}
@@ -156,7 +156,7 @@ func (s *Server) handleStorageImport(w http.ResponseWriter, r *http.Request) {
 		}
 		var items map[string]json.RawMessage
 		if err := json.Unmarshal(raw, &items); err != nil {
-			restBadRequest(w, "INVALID_BACKUP_DATA", "备份文件校验失败, 无法还原")
+			restInvalidBackup(w, err)
 			return
 		}
 		for name, value := range items {
@@ -167,7 +167,7 @@ func (s *Server) handleStorageImport(w http.ResponseWriter, r *http.Request) {
 			doc["name"] = mustJSON(name)
 			if err := s.deps.Resources.Put(r.Context(), collection.Kind, name, encodeDocument(doc)); err != nil {
 				s.logError("import resource", err, "kind", collection.Kind, "name", name)
-				restInternal(w, "导入数据失败")
+				restInternalError(w, "FAILED_TO_RESTORE_DATA", "Failed to restore data", err.Error())
 				return
 			}
 		}
@@ -175,10 +175,17 @@ func (s *Server) handleStorageImport(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.deps.Resources.Put(r.Context(), storage.KindSettings, settingsDocument, encodeDocument(settings)); err != nil {
 		s.logError("import settings", err)
-		restInternal(w, "导入数据失败")
+		restInternalError(w, "FAILED_TO_RESTORE_DATA", "Failed to restore data", err.Error())
 		return
 	}
-	restOK(w, map[string]any{})
+	restSuccess(w, nil)
+}
+
+// restInvalidBackup reproduces Sub-Store's INVALID_BACKUP_DATA response, which
+// puts the parse failure in the details field.
+func restInvalidBackup(w http.ResponseWriter, cause error) {
+	restFailed(w, errStatusDefault, "INVALID_BACKUP_DATA", errTypeRequestInvalid,
+		"Invalid backup data, failed to restore!", "Reason: "+cause.Error())
 }
 
 // storageSnapshot resolves the snapshot from either a {content: ...} wrapper or
