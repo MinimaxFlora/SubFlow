@@ -50,7 +50,8 @@ func newTestServer(t *testing.T) *httptest.Server {
 		Resources:     storage.NewResourceRepo(db),
 		Fetcher:       fetch.New(fetch.Options{AllowPrivateHosts: true}),
 		Assets: fstest.MapFS{
-			"index.html": &fstest.MapFile{Data: []byte("<title>SubFlow</title><div id=\"app\"></div>")},
+			"index.html":              &fstest.MapFile{Data: []byte("<title>SubFlow</title><div id=\"app\"></div>")},
+			"chunks/main-abc12345.js": &fstest.MapFile{Data: []byte("console.log(1)")},
 		},
 	})
 	ts := httptest.NewServer(server.Handler())
@@ -424,6 +425,45 @@ func TestSPAFallbackAndUnknownAPIRoute(t *testing.T) {
 	status, _, _ = do(t, http.MethodGet, ts.URL+"/api/definitely-not-real", nil)
 	if status != http.StatusNotFound {
 		t.Fatalf("unknown api route status = %d, want 404", status)
+	}
+}
+
+func TestAssetCacheHeaders(t *testing.T) {
+	const immutable = "public, max-age=31536000, immutable"
+	cases := map[string]string{
+		"/":                        "no-cache",
+		"/index.html":              "no-cache",
+		"/index.js":                "no-cache",
+		"/sw.js":                   "no-cache",
+		"/registerSW.js":           "no-cache",
+		"/manifest.webmanifest":    "no-cache",
+		"/chunks/main-4000cf11.js": immutable,
+		"/css/main-aa9da7e7.css":   immutable,
+	}
+	for path, want := range cases {
+		rec := httptest.NewRecorder()
+		setAssetCacheHeaders(rec, path)
+		if got := rec.Header().Get("Cache-Control"); got != want {
+			t.Errorf("setAssetCacheHeaders(%q) = %q, want %q", path, got, want)
+		}
+	}
+
+	ts := newTestServer(t)
+	status, _, _ := do(t, http.MethodGet, ts.URL+"/", nil)
+	if status != http.StatusOK {
+		t.Fatalf("index status = %d", status)
+	}
+	req, err := http.NewRequest(http.MethodGet, ts.URL+"/chunks/main-abc12345.js", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if got := resp.Header.Get("Cache-Control"); got != immutable {
+		t.Errorf("hashed asset cache = %q, want %q", got, immutable)
 	}
 }
 

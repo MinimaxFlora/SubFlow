@@ -62,7 +62,10 @@ const viteConfig = defineConfig((mode: ConfigEnv) => {
         srcDir: "src",
         outDir: "dist",
         strategies: "generateSW",
-        registerType: "prompt",
+        // A self-hosted deployment must pick up new builds without the user
+        // acting on a prompt: the app never wires up an update UI, so "prompt"
+        // left returning browsers pinned to the previously cached app shell.
+        registerType: "autoUpdate",
         // minify: true,
         // includeAssets: ['favicon.svg'],
         manifest: {

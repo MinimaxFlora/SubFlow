@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -186,6 +187,7 @@ func (s *Server) spaHandler() http.Handler {
 			respondError(w, http.StatusNotFound, "NOT_FOUND", "unknown API route")
 			return
 		}
+		setAssetCacheHeaders(w, r.URL.Path)
 		cleaned := strings.TrimPrefix(r.URL.Path, "/")
 		if cleaned == "" {
 			cleaned = "index.html"
@@ -199,6 +201,22 @@ func (s *Server) spaHandler() http.Handler {
 	})
 }
 
+// contentHashedAsset matches filenames that carry a Vite content hash, such as
+// main-4000cf11.js or main-aa9da7e7.css. Their contents never change for a
+// given name, so they can be cached forever.
+var contentHashedAsset = regexp.MustCompile(`-[0-9a-fA-F]{8,}\.[a-zA-Z0-9]+$`)
+
+// setAssetCacheHeaders keeps entry points (index.html, the service worker, the
+// non-hashed bundles and manifests) revalidated on every load so deployed
+// updates propagate, while letting content-hashed assets be cached long-term.
+func setAssetCacheHeaders(w http.ResponseWriter, path string) {
+	if contentHashedAsset.MatchString(path) {
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		return
+	}
+	w.Header().Set("Cache-Control", "no-cache")
+}
+
 func serveIndex(w http.ResponseWriter, assets fs.FS) {
 	f, err := assets.Open("index.html")
 	if err != nil {
@@ -207,6 +225,7 @@ func serveIndex(w http.ResponseWriter, assets fs.FS) {
 	}
 	defer f.Close()
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache")
 	if _, err := io.Copy(w, f); err != nil {
 		slog.Error("serve index.html", "error", err)
 	}
@@ -214,6 +233,7 @@ func serveIndex(w http.ResponseWriter, assets fs.FS) {
 
 func placeholderPage(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(`<!doctype html><html><head><meta charset="utf-8"><title>SubFlow</title></head>
 <body style="font-family:system-ui;padding:2rem">
