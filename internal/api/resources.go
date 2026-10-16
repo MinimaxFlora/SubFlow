@@ -416,11 +416,6 @@ func stableSortBy(docs []storage.Resource, rank func(storage.Resource) int) {
 	}
 }
 
-// handleWholeFiles returns files together with their content.
-func (s *Server) handleWholeFiles(w http.ResponseWriter, r *http.Request) {
-	s.handleListResources(w, r, storage.KindFile, false)
-}
-
 // cascadeRename updates the documents that reference a renamed subscription,
 // collection or file, mirroring the upstream update helpers.
 func (s *Server) cascadeRename(r *http.Request, kind, oldName, newName string) {

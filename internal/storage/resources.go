@@ -130,27 +130,6 @@ func (r *ResourceRepo) Delete(ctx context.Context, kind, name string) (bool, err
 	return n > 0, nil
 }
 
-// Rename moves a document to a new name, preserving its payload.
-func (r *ResourceRepo) Rename(ctx context.Context, kind, from, to string) error {
-	if from == to {
-		return nil
-	}
-	res, err := r.db.SQL().ExecContext(ctx,
-		`UPDATE resources SET name = ?, updated_at = ? WHERE kind = ? AND name = ?`,
-		to, time.Now().UTC().Format(time.RFC3339Nano), kind, from)
-	if err != nil {
-		return fmt.Errorf("rename %s/%s: %w", kind, from, err)
-	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if n == 0 {
-		return ErrResourceNotFound
-	}
-	return nil
-}
-
 // Reorder rewrites the sort index following the given name order. Names not
 // present in the list keep their relative order after the listed ones.
 func (r *ResourceRepo) Reorder(ctx context.Context, kind string, names []string) error {

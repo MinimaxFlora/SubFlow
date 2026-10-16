@@ -3,7 +3,6 @@ package proxy
 import (
 	"encoding/base64"
 	"fmt"
-	"sort"
 	"strings"
 )
 
@@ -210,12 +209,5 @@ func filterForPlatform(nodes []Node, platform string, opts Options) []Node {
 			out = append(out, n)
 		}
 	}
-	return out
-}
-
-// Registry returns platforms sorted for stable UI output.
-func Registry() []Platform {
-	out := append([]Platform(nil), Platforms...)
-	sort.SliceStable(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out
 }

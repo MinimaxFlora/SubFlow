@@ -72,8 +72,8 @@
 </template>
 
 <script lang="ts" setup>
-  import { useCodeStore } from '@/store/codeStore';
   import EmptyState from '@/components/EmptyState.vue';
+  import { useCodeStore } from '@/store/codeStore';
   import cmView from '@/views/editCode/cmView.vue';
   import { useQRCode } from '@vueuse/integrations/useQRCode';
   import { computed, ref } from 'vue';
