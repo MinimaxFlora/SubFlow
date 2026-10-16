@@ -11,8 +11,15 @@
 #
 # The script installs the release binary to /usr/local/bin/subflow, keeps
 # configuration in /etc/subflow/subflow.env, stores data in /var/lib/subflow
-# and registers a systemd (or OpenRC) service. It is non-interactive when stdin
-# is not a TTY.
+# and registers a systemd (or OpenRC) service.
+#
+# When a terminal is available the installer asks how SubFlow should be reached:
+# directly by IP and port, or by a domain name with automatic HTTPS (which
+# installs and configures Caddy as a reverse proxy). Set SUBFLOW_ACCESS_MODE=ip
+# or SUBFLOW_ACCESS_MODE=domain to skip the prompt for unattended installs.
+#
+# Environment overrides: SUBFLOW_HOST, SUBFLOW_PORT, SUBFLOW_LOG_LEVEL,
+# SUBFLOW_ACCESS_MODE, SUBFLOW_DOMAIN, SUBFLOW_ACME_EMAIL.
 
 set -euo pipefail
 
@@ -24,15 +31,27 @@ BIN_PATH="/usr/local/bin/subflow"
 RUN_PATH="/usr/local/bin/subflow-run"
 CONF_DIR="/etc/subflow"
 ENV_FILE="${CONF_DIR}/${SERVICE_NAME}.env"
+INSTALL_CONF="${CONF_DIR}/install.conf"
 DATA_DIR="/var/lib/subflow"
 LOG_FILE="/var/log/subflow.log"
+
+CADDYFILE="/etc/caddy/Caddyfile"
+CADDY_SERVICE="caddy"
 
 SYSTEMD_UNIT="/etc/systemd/system/${SERVICE_NAME}.service"
 OPENRC_UNIT="/etc/init.d/${SERVICE_NAME}"
 
-SUBFLOW_HOST="${SUBFLOW_HOST:-0.0.0.0}"
+SUBFLOW_HOST="${SUBFLOW_HOST:-}"
 SUBFLOW_PORT="${SUBFLOW_PORT:-8080}"
 SUBFLOW_LOG_LEVEL="${SUBFLOW_LOG_LEVEL:-info}"
+
+# Access mode: "ip" exposes SubFlow directly on SUBFLOW_PORT, "domain" puts
+# Caddy in front of it and serves HTTPS on ports 80/443.
+SUBFLOW_ACCESS_MODE="${SUBFLOW_ACCESS_MODE:-}"
+SUBFLOW_DOMAIN="${SUBFLOW_DOMAIN:-}"
+SUBFLOW_ACME_EMAIL="${SUBFLOW_ACME_EMAIL:-}"
+ACCESS_MODE=""
+DOMAIN=""
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -56,6 +75,22 @@ need_root() {
 
 have_systemd() { command -v systemctl > /dev/null 2>&1 && [[ -d /run/systemd/system ]]; }
 have_openrc() { command -v rc-service > /dev/null 2>&1; }
+
+# A controlling terminal lets us prompt even when the script itself is piped
+# through a shell (for example `curl ... | bash`), where stdin is the script.
+is_interactive() {
+  [[ -t 0 ]] || { [[ -r /dev/tty ]] && [[ -w /dev/tty ]]; }
+}
+
+prompt_line() {
+  local __prompt="$1" __var="$2" __line=""
+  if [[ -r /dev/tty ]]; then
+    IFS= read -r -p "${__prompt}" __line < /dev/tty || __line=""
+  elif [[ -t 0 ]]; then
+    IFS= read -r -p "${__prompt}" __line || __line=""
+  fi
+  printf -v "${__var}" '%s' "${__line}"
+}
 
 detect_target() {
   local os machine
@@ -157,10 +192,16 @@ write_env_file() {
     info "Keeping the existing configuration at ${ENV_FILE}."
     return 0
   fi
+  # In domain mode SubFlow sits behind Caddy, so bind it to the loopback
+  # interface unless the operator explicitly chose a bind address.
+  local host="${SUBFLOW_HOST}"
+  if [[ -z "${host}" ]]; then
+    if [[ "${ACCESS_MODE}" == "domain" ]]; then host="127.0.0.1"; else host="0.0.0.0"; fi
+  fi
   umask 077
   cat > "${ENV_FILE}" << EOF
 # SubFlow configuration. See https://github.com/${REPO}
-SUBFLOW_HOST=${SUBFLOW_HOST}
+SUBFLOW_HOST=${host}
 SUBFLOW_PORT=${SUBFLOW_PORT}
 SUBFLOW_DATA_DIR=${DATA_DIR}
 SUBFLOW_DB_PATH=${DATA_DIR}/subflow.db
@@ -178,6 +219,178 @@ set +a
 exec "${BIN_PATH}"
 EOF
   chmod 0755 "${RUN_PATH}"
+}
+
+# --- Access mode (direct IP vs. domain with Caddy) -------------------------
+
+conf_get() {
+  local key="$1"
+  [[ -f "${INSTALL_CONF}" ]] || return 0
+  sed -n -E "s/^${key}=(.*)$/\1/p" "${INSTALL_CONF}" | head -n 1
+}
+
+save_install_conf() {
+  install -d -m 0755 "${CONF_DIR}"
+  umask 077
+  cat > "${INSTALL_CONF}" << EOF
+# SubFlow installer state. Generated automatically; do not edit by hand.
+ACCESS_MODE=${ACCESS_MODE}
+DOMAIN=${DOMAIN}
+ACME_EMAIL=${SUBFLOW_ACME_EMAIL}
+EOF
+}
+
+normalize_domain() {
+  local d="$1"
+  d="${d#http://}"
+  d="${d#https://}"
+  d="${d%%/*}"
+  d="${d%%:*}"
+  printf '%s' "${d,,}"
+}
+
+valid_domain() {
+  [[ "$1" =~ ^([a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$ ]]
+}
+
+prompt_access_mode() {
+  local answer
+  echo
+  info "How should SubFlow be accessed?"
+  echo "  1) Directly by IP address and port (default)"
+  echo "  2) By a domain name with automatic HTTPS (installs Caddy)"
+  while true; do
+    prompt_line "Select [1/2]: " answer
+    case "${answer}" in
+      "" | 1) ACCESS_MODE="ip"; return 0 ;;
+      2) ACCESS_MODE="domain"; return 0 ;;
+      *) warn "Please enter 1 or 2." ;;
+    esac
+  done
+}
+
+prompt_domain() {
+  local answer
+  while true; do
+    prompt_line "Domain name to serve (for example subflow.example.com): " answer
+    answer="$(normalize_domain "${answer}")"
+    if valid_domain "${answer}"; then
+      DOMAIN="${answer}"
+      return 0
+    fi
+    warn "That does not look like a valid domain name."
+  done
+}
+
+# Resolve the access mode from environment, saved state, or an interactive
+# prompt, and validate the associated domain when needed.
+resolve_access_mode() {
+  if [[ -n "${SUBFLOW_ACCESS_MODE}" ]]; then
+    ACCESS_MODE="${SUBFLOW_ACCESS_MODE}"
+  elif [[ -z "${SUBFLOW_DOMAIN}" ]]; then
+    ACCESS_MODE="$(conf_get ACCESS_MODE)"
+  fi
+
+  case "${ACCESS_MODE}" in
+    "") if [[ -n "${SUBFLOW_DOMAIN}" ]]; then ACCESS_MODE="domain"; elif is_interactive; then prompt_access_mode; else ACCESS_MODE="ip"; fi ;;
+    ip | 1 | direct) ACCESS_MODE="ip" ;;
+    domain | 2 | caddy | https) ACCESS_MODE="domain" ;;
+    *) die "Invalid SUBFLOW_ACCESS_MODE: ${ACCESS_MODE}. Use 'ip' or 'domain'." ;;
+  esac
+
+  if [[ "${ACCESS_MODE}" == "ip" ]]; then
+    info "Access mode: direct IP on port ${SUBFLOW_PORT}."
+    return 0
+  fi
+
+  if [[ -n "${SUBFLOW_DOMAIN}" ]]; then
+    DOMAIN="$(normalize_domain "${SUBFLOW_DOMAIN}")"
+  else
+    DOMAIN="$(conf_get DOMAIN)"
+  fi
+  if [[ -z "${DOMAIN}" ]] && is_interactive; then
+    prompt_domain
+  fi
+  valid_domain "${DOMAIN}" || die "Domain mode requires a valid domain; set SUBFLOW_DOMAIN or run interactively."
+  [[ -n "${SUBFLOW_ACME_EMAIL}" ]] || SUBFLOW_ACME_EMAIL="$(conf_get ACME_EMAIL)"
+  info "Access mode: domain ${DOMAIN} with automatic HTTPS (Caddy)."
+}
+
+caddy_restart() {
+  if have_systemd; then systemctl restart "${CADDY_SERVICE}"; else rc-service "${CADDY_SERVICE}" restart; fi
+}
+
+caddy_enable() {
+  if have_systemd; then systemctl enable "${CADDY_SERVICE}" > /dev/null 2>&1 || true; else rc-update add "${CADDY_SERVICE}" default > /dev/null 2>&1 || true; fi
+}
+
+install_caddy() {
+  if command -v caddy > /dev/null 2>&1; then
+    ok "Caddy is already installed."
+    return 0
+  fi
+  info "Installing Caddy ..."
+  if command -v apt-get > /dev/null 2>&1; then
+    DEBIAN_FRONTEND=noninteractive apt-get update -qq
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq caddy
+  elif command -v dnf > /dev/null 2>&1; then
+    dnf install -y caddy
+  elif command -v yum > /dev/null 2>&1; then
+    yum install -y caddy
+  elif command -v pacman > /dev/null 2>&1; then
+    pacman -S --noconfirm caddy
+  elif command -v zypper > /dev/null 2>&1; then
+    zypper -n install caddy
+  elif command -v apk > /dev/null 2>&1; then
+    apk add --no-cache caddy
+  else
+    die "Could not install Caddy automatically. Install it, then re-run the installer."
+  fi
+  command -v caddy > /dev/null 2>&1 || die "Caddy installation did not succeed."
+}
+
+configure_caddy() {
+  install -d -m 0755 "$(dirname "${CADDYFILE}")"
+  if [[ -f "${CADDYFILE}" ]] && ! grep -q "Managed by the SubFlow installer" "${CADDYFILE}"; then
+    cp -a "${CADDYFILE}" "${CADDYFILE}.bak" || true
+    warn "Backed up the previous Caddyfile to ${CADDYFILE}.bak."
+  fi
+  umask 022
+  if [[ -n "${SUBFLOW_ACME_EMAIL}" ]]; then
+    cat > "${CADDYFILE}" << EOF
+# Managed by the SubFlow installer. Manual edits may be overwritten on update.
+{
+	email ${SUBFLOW_ACME_EMAIL}
+}
+
+${DOMAIN} {
+	encode gzip
+	reverse_proxy 127.0.0.1:${SUBFLOW_PORT}
+}
+EOF
+  else
+    cat > "${CADDYFILE}" << EOF
+# Managed by the SubFlow installer. Manual edits may be overwritten on update.
+${DOMAIN} {
+	encode gzip
+	reverse_proxy 127.0.0.1:${SUBFLOW_PORT}
+}
+EOF
+  fi
+  ok "Wrote ${CADDYFILE} for ${DOMAIN}."
+  if command -v caddy > /dev/null 2>&1; then
+    caddy validate --config "${CADDYFILE}" --adapter caddyfile > /dev/null 2>&1 \
+      || warn "Caddy reported issues while validating ${CADDYFILE}."
+  fi
+  caddy_enable
+  caddy_restart
+  ok "Caddy is running as a reverse proxy for ${DOMAIN}."
+}
+
+setup_domain_access() {
+  install_caddy
+  configure_caddy
+  warn "Make sure ports 80 and 443 are open in your firewall and that ${DOMAIN} points to this server."
 }
 
 install_systemd_service() {
@@ -276,7 +489,12 @@ print_summary() {
   echo
   echo "  Configuration : ${ENV_FILE}"
   echo "  Data          : ${DATA_DIR}"
-  echo "  Web interface : http://<server-ip>:${SUBFLOW_PORT}/"
+  if [[ "${ACCESS_MODE}" == "domain" ]]; then
+    echo "  Web interface : https://${DOMAIN}/"
+    echo "  Reverse proxy : Caddy (${CADDYFILE})"
+  else
+    echo "  Web interface : http://<server-ip>:${SUBFLOW_PORT}/"
+  fi
   echo
   echo "  Manage with   : ${CTL_PATH_ALIAS}"
   echo "    start | stop | restart | status | log | update | uninstall"
@@ -297,11 +515,16 @@ cmd_install() {
   target="$(detect_target)"
   tag="$(resolve_latest_tag)"
   [[ -n "${tag}" ]] || die "Failed to resolve the latest release. GitHub API may be rate limited; retry later."
+  resolve_access_mode
   info "Installing SubFlow (${tag}) for ${target} ..."
   download_binary "${tag}" "${target}"
   write_env_file
+  save_install_conf
   install_ctl
   install_service
+  if [[ "${ACCESS_MODE}" == "domain" ]]; then
+    setup_domain_access
+  fi
   print_summary "${tag}" "${target}"
 }
 
@@ -311,15 +534,20 @@ cmd_update() {
   target="$(detect_target)"
   tag="$(resolve_latest_tag)"
   [[ -n "${tag}" ]] || die "Failed to resolve the latest release. GitHub API may be rate limited; retry later."
+  resolve_access_mode
   info "Updating SubFlow to ${tag} for ${target} ..."
   download_binary "${tag}" "${target}"
   write_env_file
+  save_install_conf
   install_ctl
   if [[ -f "${SYSTEMD_UNIT}" ]] || [[ -f "${OPENRC_UNIT}" ]]; then
     SERVICE_INSTALLED=true
     service_restart
   else
     install_service
+  fi
+  if [[ "${ACCESS_MODE}" == "domain" ]]; then
+    setup_domain_access
   fi
   print_summary "${tag}" "${target}"
 }
@@ -337,6 +565,17 @@ cmd_uninstall() {
     rm -f "${OPENRC_UNIT}"
   fi
   rm -f "${BIN_PATH}" "${RUN_PATH}" "${CTL_PATH_ALIAS}"
+  if [[ -f "${CADDYFILE}" ]] && grep -q "Managed by the SubFlow installer" "${CADDYFILE}"; then
+    if [[ -f "${CADDYFILE}.bak" ]]; then
+      mv -f "${CADDYFILE}.bak" "${CADDYFILE}"
+      info "Restored the previous Caddyfile from ${CADDYFILE}.bak."
+    else
+      rm -f "${CADDYFILE}"
+    fi
+    if command -v caddy > /dev/null 2>&1; then
+      caddy_restart > /dev/null 2>&1 || true
+    fi
+  fi
   ok "SubFlow has been uninstalled."
   info "Configuration (${ENV_FILE}) and data (${DATA_DIR}) were kept."
   info "Remove them manually if you no longer need them:"
@@ -364,6 +603,11 @@ Commands:
   help         Show this help
 
 Environment overrides: SUBFLOW_HOST, SUBFLOW_PORT, SUBFLOW_LOG_LEVEL
+                       SUBFLOW_ACCESS_MODE (ip|domain), SUBFLOW_DOMAIN, SUBFLOW_ACME_EMAIL
+
+When run with a terminal, the installer asks whether to expose SubFlow by IP
+address or by a domain name with automatic HTTPS (via Caddy). Set the overrides
+above to install unattended.
 EOF
 }
 
