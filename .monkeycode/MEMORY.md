@@ -74,3 +74,21 @@ This file records user instructions, preferences, and teachings for reference in
   - `web/package.json` pins `packageManager: pnpm@11.0.9`, so corepack resolves pnpm per-directory. The first run in a fresh environment may fail while corepack downloads that version; set `COREPACK_ENABLE_DOWNLOAD_PROMPT=0` and re-run `make check` once the tarball is cached.
   - The system `pnpm` shim was broken (corepack expected `bin/pnpm.cjs` while the package shipped `bin/pnpm.mjs`); pnpm 11.28.6 is installed at `/opt/pnpm-global/bin/pnpm` if the shim misbehaves.
   - Building the frontend needs extra heap on this host (`NODE_OPTIONS=--max-old-space-size=2048`) and should run under a managed background terminal with a memory cap (~1.8 GiB peak observed).
+
+[User Instruction Summary]
+- Date: 2026-10-16
+- Context: User reviewed pushed commits and objected to the MonkeyCode-AI identity and co-author trailer
+- Instructions:
+  - Commits pushed to `https://github.com/MinimaxFlora/SubFlow` must use the user's identity `MinimaxFlora <zj18139624826@gmail.com>`, never the MonkeyCode-AI platform account.
+  - Container images must be published to Docker Hub as `<DOCKERHUB_USERNAME>/subflow` in addition to GHCR.
+
+[Project Knowledge Summary]
+- Date: 2026-10-16
+- Context: Discovered by Agent while fixing commit authorship on the SubFlow repository
+- Category: Environment Configuration
+- Instructions:
+  - The platform writes repo-local `.git/config` keys `user.name`, `user.email`, `coauthor.0.name`, `coauthor.0.email` (all `monkeycode-ai`), which override the global `MinimaxFlora` identity.
+  - `.git/hooks/prepare-commit-msg` reads every repo-local `coauthor.*` pair and appends `Co-authored-by: <name> <email>` to each commit message; removing the `coauthor.*` config disables the trailer.
+  - To commit as the user, run `git config --local --unset user.name user.email coauthor.0.name coauthor.0.email` first; to re-author existing commits use `git filter-branch --env-filter` with the user identity plus a `--msg-filter` that drops the trailer line, then force-push.
+  - Repository secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` drive the Docker Hub login in `.github/workflows/publish.yml`; set them with the Actions secrets API (values must be sealed with the repo public key, e.g. via `pynacl`).
+  - Secrets created after a workflow run starts are not visible to that run; wait for the next run or re-run failed jobs instead of expecting an in-progress run to pick them up.
