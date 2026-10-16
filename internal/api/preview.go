@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/subflow-org/subflow/internal/proxy"
@@ -59,7 +60,7 @@ func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request, typeParam
 		return
 	}
 
-	original, process, err := s.resolveDocument(r.Context(), typeParam, raw, map[string]bool{})
+	original, process, err := s.resolveDocument(r.Context(), typeParam, raw, map[string]bool{}, false)
 	if err != nil {
 		restInternalError(w, "INTERNAL_SERVER_ERROR", "Failed to preview "+previewSubject(typeParam), err.Error())
 		return
@@ -114,16 +115,14 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request, kind, na
 	}
 
 	query := r.URL.Query()
-	target := query.Get("target")
-	if target == "" {
-		target = "base64"
-	}
-	if !proxy.IsPlatform(target) {
-		restInternalError(w, "INTERNAL_SERVER_ERROR", downloadFailure(kind, name), "unsupported target platform: "+target)
+	target, ok := resolveTarget(query, r.PathValue("target"), r.Header)
+	if !ok {
+		restInternalError(w, "INTERNAL_SERVER_ERROR", downloadFailure(kind, name), "unsupported target platform: "+requestedTarget(query, r.PathValue("target"), r.Header))
 		return
 	}
 
-	nodes, process, err := s.resolveDocument(r.Context(), kind, json.RawMessage(doc.Data), map[string]bool{})
+	noCache := query.Get("noCache") != ""
+	nodes, process, err := s.resolveDocument(r.Context(), kind, json.RawMessage(doc.Data), map[string]bool{}, noCache)
 	if err != nil {
 		restInternalError(w, "INTERNAL_SERVER_ERROR", downloadFailure(kind, name), err.Error())
 		return
@@ -155,6 +154,83 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request, kind, na
 	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=%q", name+"."+platformExtension(target)))
 	_, _ = w.Write([]byte(output))
+}
+
+// requestedTarget returns the raw target the client asked for, so error
+// messages can echo it back.
+func requestedTarget(query url.Values, pathTarget string, header http.Header) string {
+	if v := query.Get("platform"); v != "" {
+		return v
+	}
+	if pathTarget != "" {
+		return pathTarget
+	}
+	if v := query.Get("target"); v != "" {
+		return v
+	}
+	if v := platformFromUserAgent(header); v != "" {
+		return v
+	}
+	return "JSON"
+}
+
+// resolveTarget normalizes the requested output platform, mirroring Sub-Store:
+// the `platform` query parameter, then the `target` path or query parameter,
+// then User-Agent detection, and finally a JSON fallback.
+func resolveTarget(query url.Values, pathTarget string, header http.Header) (string, bool) {
+	for _, raw := range []string{query.Get("platform"), pathTarget, query.Get("target")} {
+		if raw == "" {
+			continue
+		}
+		return proxy.CanonicalPlatform(raw)
+	}
+	if raw := platformFromUserAgent(header); raw != "" {
+		return proxy.CanonicalPlatform(raw)
+	}
+	return proxy.CanonicalPlatform("JSON")
+}
+
+// platformFromUserAgent maps a client User-Agent (and Accept header) onto a
+// Sub-Store platform name. The order of the checks matches upstream
+// getPlatformFromUserAgent so detection is consistent.
+func platformFromUserAgent(header http.Header) string {
+	ua := header.Get("User-Agent")
+	lower := strings.ToLower(ua)
+	accept := strings.ToLower(header.Get("Accept"))
+
+	switch {
+	case strings.Contains(ua, "Quantumult%20X"):
+		return "QX"
+	case strings.Contains(lower, "egern"):
+		return "Egern"
+	case strings.Contains(ua, "Surfboard"):
+		return "Surfboard"
+	case strings.Contains(ua, "Surge Mac"):
+		return "SurgeMac"
+	case strings.Contains(ua, "Surge"):
+		return "Surge"
+	case strings.Contains(ua, "Decar"), strings.Contains(ua, "Loon"):
+		return "Loon"
+	case strings.Contains(ua, "Shadowrocket"):
+		return "Shadowrocket"
+	case strings.Contains(ua, "Stash"):
+		return "Stash"
+	case lower == "meta",
+		strings.Contains(lower, "clash") && strings.Contains(lower, "meta"),
+		strings.Contains(lower, "clash-verge"),
+		strings.Contains(lower, "flclash"):
+		return "ClashMeta"
+	case strings.Contains(lower, "clash"):
+		return "Clash"
+	case strings.Contains(lower, "v2ray"):
+		return "V2Ray"
+	case strings.Contains(lower, "sing-box"), strings.Contains(lower, "singbox"):
+		return "sing-box"
+	case strings.HasPrefix(accept, "application/json"):
+		return "JSON"
+	default:
+		return "V2Ray"
+	}
 }
 
 // downloadFailure is the message Sub-Store returns when producing a download
@@ -190,7 +266,7 @@ func (s *Server) handleFileDownload(w http.ResponseWriter, r *http.Request, name
 		return
 	}
 
-	content, err := s.resolveFileContent(r.Context(), file)
+	content, err := s.resolveFileContent(r.Context(), file, r.URL.Query().Get("noCache") != "")
 	if err != nil {
 		restInternalError(w, "INTERNAL_SERVER_ERROR", downloadFailure(storage.KindFile, name), err.Error())
 		return
@@ -205,14 +281,14 @@ func (s *Server) handleFileDownload(w http.ResponseWriter, r *http.Request, name
 
 // resolveFileContent returns a file's body, fetching it when the file points at
 // a remote URL.
-func (s *Server) resolveFileContent(ctx context.Context, file fileDocument) (string, error) {
+func (s *Server) resolveFileContent(ctx context.Context, file fileDocument, noCache bool) (string, error) {
 	if file.Source == "local" || file.URL == "" {
 		return file.Content, nil
 	}
 	if s.deps.Fetcher == nil {
 		return "", errors.New("no fetcher configured; cannot fetch remote file")
 	}
-	result, err := s.deps.Fetcher.Get(ctx, file.URL, "")
+	result, err := s.deps.Fetcher.GetCached(ctx, file.URL, "", noCache)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch file: %w", err)
 	}
@@ -226,6 +302,7 @@ func (s *Server) resolveDocument(
 	kind string,
 	raw json.RawMessage,
 	seen map[string]bool,
+	noCache bool,
 ) ([]proxy.Node, []processStep, error) {
 	switch kind {
 	case "sub", "subs":
@@ -233,7 +310,7 @@ func (s *Server) resolveDocument(
 		if err := json.Unmarshal(raw, &doc); err != nil {
 			return nil, nil, errors.New("invalid subscription data")
 		}
-		content, err := s.subscriptionContent(ctx, doc)
+		content, err := s.subscriptionContent(ctx, doc, noCache)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -258,7 +335,7 @@ func (s *Server) resolveDocument(
 			if err != nil {
 				return nil, nil, fmt.Errorf("collection references missing subscription %s", member)
 			}
-			memberNodes, _, err := s.resolveDocument(ctx, "sub", json.RawMessage(memberDoc.Data), seen)
+			memberNodes, _, err := s.resolveDocument(ctx, "sub", json.RawMessage(memberDoc.Data), seen, noCache)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -284,14 +361,14 @@ func (s *Server) resolveDocument(
 
 // subscriptionContent returns the subscription body, fetching it when the
 // subscription is remote.
-func (s *Server) subscriptionContent(ctx context.Context, doc subDocument) (string, error) {
+func (s *Server) subscriptionContent(ctx context.Context, doc subDocument, noCache bool) (string, error) {
 	if doc.Source == "local" || doc.URL == "" {
 		return doc.Content, nil
 	}
 	if s.deps.Fetcher == nil {
 		return "", errors.New("no fetcher configured; cannot fetch remote subscription")
 	}
-	result, err := s.deps.Fetcher.Get(ctx, doc.URL, doc.UA)
+	result, err := s.deps.Fetcher.GetCached(ctx, doc.URL, doc.UA, noCache)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch subscription: %w", err)
 	}

@@ -150,6 +150,102 @@ func TestConvertReportsUnsupported(t *testing.T) {
 	}
 }
 
+// TestCanonicalPlatform covers the target spellings the Sub-Store frontend and
+// real clients send, which differ in case and brand name from the canonical IDs.
+func TestCanonicalPlatform(t *testing.T) {
+	cases := map[string]string{
+		"uri":          "uri",
+		"URI":          "uri",
+		"base64":       "base64",
+		"JSON":         "json",
+		"all":          "json",
+		"Clash":        "clash",
+		"ClashMeta":    "clashmeta",
+		"clash.meta":   "clashmeta",
+		"mihomo":       "clashmeta",
+		"MiHoMo":       "clashmeta",
+		"Stash":        "stash",
+		"sing-box":     "singbox",
+		"singbox":      "singbox",
+		"V2Ray":        "v2ray",
+		"v2":           "v2ray",
+		"Surge":        "surge",
+		"SurgeMac":     "surgemac",
+		"Loon":         "loon",
+		"QX":           "qx",
+		"QuantumultX":  "qx",
+		"Surfboard":    "surfboard",
+		"Shadowrocket": "shadowrocket",
+		"ShadowRocket": "shadowrocket",
+		"Egern":        "egern",
+	}
+	for raw, want := range cases {
+		got, ok := CanonicalPlatform(raw)
+		if !ok || got != want {
+			t.Errorf("CanonicalPlatform(%q) = (%q, %v), want (%q, true)", raw, got, ok, want)
+		}
+	}
+	if _, ok := CanonicalPlatform("not-a-platform"); ok {
+		t.Error("CanonicalPlatform accepted an unknown target")
+	}
+}
+
+// TestProduceEveryPlatform ensures every registered platform renders the sample
+// subscription without error and that the alias spellings resolve too.
+func TestProduceEveryPlatform(t *testing.T) {
+	nodes, err := ParseSubscription(sampleSubscription())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range Platforms {
+		out, err := Produce(nodes, p.ID, Options{})
+		if err != nil {
+			t.Fatalf("Produce(%q): %v", p.ID, err)
+		}
+		if strings.TrimSpace(out) == "" {
+			t.Fatalf("Produce(%q) returned empty output", p.ID)
+		}
+	}
+	// A branded spelling must resolve to the same producer.
+	meta, err := Produce(nodes, "ClashMeta", Options{})
+	if err != nil {
+		t.Fatalf("Produce(ClashMeta): %v", err)
+	}
+	if !strings.Contains(meta, "proxies:") {
+		t.Fatalf("ClashMeta alias output looks wrong:\n%s", meta)
+	}
+}
+
+func TestProduceJSONAndEgern(t *testing.T) {
+	nodes, err := ParseSubscription(sampleSubscription())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	jsonOut, err := Produce(nodes, "JSON", Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var arr []map[string]any
+	if err := json.Unmarshal([]byte(jsonOut), &arr); err != nil {
+		t.Fatalf("JSON output is not a valid array: %v", err)
+	}
+	if len(arr) != len(nodes) {
+		t.Fatalf("JSON output has %d entries, want %d", len(arr), len(nodes))
+	}
+
+	egernOut, err := Produce(nodes, "Egern", Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(strings.TrimSpace(egernOut), "proxies:") {
+		t.Fatalf("Egern output must start with a proxies list:\n%s", egernOut)
+	}
+	if !strings.Contains(egernOut, `"server":"example.com"`) {
+		t.Fatalf("Egern output missing a proxy entry:\n%s", egernOut)
+	}
+}
+
 // sing-box requires uTLS for a REALITY client, so the producer must inject a
 // fingerprint even when the source node does not specify one.
 func TestSingBoxRealityAlwaysHasUTLS(t *testing.T) {

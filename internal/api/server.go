@@ -85,7 +85,13 @@ func New(deps Deps) *Server {
 	mux.HandleFunc("POST /api/archives/{id}/restore", s.handleNotImplemented("archive restore"))
 
 	mux.HandleFunc("GET /download/collection/{name}", s.handleDownloadCollection)
+	mux.HandleFunc("GET /download/collection/{name}/{target}", s.handleDownloadCollectionTarget)
 	mux.HandleFunc("GET /download/{name}", s.handleDownloadSub)
+	mux.HandleFunc("GET /download/{name}/{target}", s.handleDownloadSubTarget)
+	mux.HandleFunc("GET /share/sub/{name}", s.handleDownloadSub)
+	mux.HandleFunc("GET /share/sub/{name}/{target}", s.handleDownloadSubTarget)
+	mux.HandleFunc("GET /share/col/{name}", s.handleDownloadCollection)
+	mux.HandleFunc("GET /share/col/{name}/{target}", s.handleDownloadCollectionTarget)
 
 	mux.HandleFunc("/api/{type}", s.handleResourceCollection)
 	mux.HandleFunc("/api/{type}/{name}", s.handleResourceItem)

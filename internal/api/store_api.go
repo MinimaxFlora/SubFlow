@@ -199,6 +199,17 @@ func (s *Server) handleDownloadCollection(w http.ResponseWriter, r *http.Request
 	s.handleDownload(w, r, storage.KindCollection, r.PathValue("name"))
 }
 
+// handleDownloadSubTarget serves GET /download/{name}/{target}, the path-style
+// target selector that Sub-Store clients also use.
+func (s *Server) handleDownloadSubTarget(w http.ResponseWriter, r *http.Request) {
+	s.handleDownload(w, r, storage.KindSub, r.PathValue("name"))
+}
+
+// handleDownloadCollectionTarget serves GET /download/collection/{name}/{target}.
+func (s *Server) handleDownloadCollectionTarget(w http.ResponseWriter, r *http.Request) {
+	s.handleDownload(w, r, storage.KindCollection, r.PathValue("name"))
+}
+
 func methodNotAllowed(w http.ResponseWriter, allowed string) {
 	w.Header().Set("Allow", allowed)
 	restFailed(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", errTypeRequestInvalid,

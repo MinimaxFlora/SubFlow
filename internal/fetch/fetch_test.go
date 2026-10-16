@@ -2,9 +2,13 @@ package fetch
 
 import (
 	"context"
+	"fmt"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strconv"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -84,6 +88,71 @@ func TestResolveAllSafeLiteralIP(t *testing.T) {
 
 	if _, err := resolveAllSafe(context.Background(), "127.0.0.1", false); err == nil {
 		t.Fatal("resolveAllSafe(127.0.0.1) = nil, want error")
+	}
+}
+
+func TestGetCachedReusesFreshResponse(t *testing.T) {
+	var hits int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		n := atomic.AddInt32(&hits, 1)
+		fmt.Fprintf(w, "body-%d", n)
+	}))
+	defer srv.Close()
+
+	f := New(Options{AllowPrivateHosts: true})
+	ctx := context.Background()
+
+	first, err := f.GetCached(ctx, srv.URL, "", false)
+	if err != nil {
+		t.Fatalf("first GetCached: %v", err)
+	}
+	if first.Content != "body-1" {
+		t.Fatalf("first content = %q, want body-1", first.Content)
+	}
+
+	second, err := f.GetCached(ctx, srv.URL, "", false)
+	if err != nil {
+		t.Fatalf("second GetCached: %v", err)
+	}
+	if second.Content != "body-1" {
+		t.Fatalf("cached content = %q, want body-1", second.Content)
+	}
+	if got := atomic.LoadInt32(&hits); got != 1 {
+		t.Fatalf("upstream hits = %d, want 1", got)
+	}
+
+	if _, err := f.GetCached(ctx, srv.URL, "", true); err != nil {
+		t.Fatalf("noCache GetCached: %v", err)
+	}
+	if got := atomic.LoadInt32(&hits); got != 2 {
+		t.Fatalf("upstream hits after noCache = %d, want 2", got)
+	}
+}
+
+func TestGetCachedKeyIncludesUserAgent(t *testing.T) {
+	var hits int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&hits, 1)
+		fmt.Fprint(w, r.Header.Get("User-Agent"))
+	}))
+	defer srv.Close()
+
+	f := New(Options{AllowPrivateHosts: true})
+	ctx := context.Background()
+
+	a, err := f.GetCached(ctx, srv.URL, "ua-one", false)
+	if err != nil {
+		t.Fatalf("GetCached ua-one: %v", err)
+	}
+	b, err := f.GetCached(ctx, srv.URL, "ua-two", false)
+	if err != nil {
+		t.Fatalf("GetCached ua-two: %v", err)
+	}
+	if a.Content != "ua-one" || b.Content != "ua-two" {
+		t.Fatalf("per-UA responses wrong: %q / %q", a.Content, b.Content)
+	}
+	if got := atomic.LoadInt32(&hits); got != 2 {
+		t.Fatalf("upstream hits = %d, want 2 (one per User-Agent)", got)
 	}
 }
 

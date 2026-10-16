@@ -19,6 +19,7 @@ type Platform struct {
 var Platforms = []Platform{
 	{ID: "uri", Name: "URI", Extension: "txt", Group: "generic"},
 	{ID: "base64", Name: "Base64", Extension: "txt", Group: "generic"},
+	{ID: "json", Name: "JSON", Extension: "json", Group: "json"},
 	{ID: "clash", Name: "Clash", Extension: "yaml", Group: "clash"},
 	{ID: "clashmeta", Name: "Clash Meta", Extension: "yaml", Group: "clash"},
 	{ID: "stash", Name: "Stash", Extension: "yaml", Group: "clash"},
@@ -30,16 +31,49 @@ var Platforms = []Platform{
 	{ID: "qx", Name: "Quantumult X", Extension: "conf", Group: "line"},
 	{ID: "surfboard", Name: "Surfboard", Extension: "conf", Group: "line"},
 	{ID: "shadowrocket", Name: "Shadowrocket", Extension: "conf", Group: "line"},
+	{ID: "egern", Name: "Egern", Extension: "yaml", Group: "line"},
+}
+
+// platformAliases maps every target spelling accepted by Sub-Store and its
+// frontend onto the canonical platform ID. Lookups are case-insensitive, which
+// covers the mix of spellings the frontend and clients send (Stash, ClashMeta,
+// mihomo, ShadowRocket, sing-box, QX, ...).
+var platformAliases = map[string]string{
+	"uri":          "uri",
+	"base64":       "base64",
+	"json":         "json",
+	"all":          "json",
+	"clash":        "clash",
+	"meta":         "clashmeta",
+	"clashmeta":    "clashmeta",
+	"clash.meta":   "clashmeta",
+	"mihomo":       "clashmeta",
+	"stash":        "stash",
+	"singbox":      "singbox",
+	"sing-box":     "singbox",
+	"v2":           "v2ray",
+	"v2ray":        "v2ray",
+	"surge":        "surge",
+	"surgemac":     "surgemac",
+	"loon":         "loon",
+	"qx":           "qx",
+	"quantumultx":  "qx",
+	"surfboard":    "surfboard",
+	"shadowrocket": "shadowrocket",
+	"egern":        "egern",
+}
+
+// CanonicalPlatform normalizes a target spelling and reports whether it is a
+// known platform. The match ignores case and surrounding whitespace.
+func CanonicalPlatform(raw string) (string, bool) {
+	id, ok := platformAliases[strings.ToLower(strings.TrimSpace(raw))]
+	return id, ok
 }
 
 // IsPlatform reports whether id is a known target.
 func IsPlatform(id string) bool {
-	for _, p := range Platforms {
-		if p.ID == id {
-			return true
-		}
-	}
-	return false
+	_, ok := CanonicalPlatform(id)
+	return ok
 }
 
 // Options tunes production behaviour.
@@ -51,6 +85,12 @@ type Options struct {
 
 // Produce renders nodes into the requested target platform.
 func Produce(nodes []Node, platform string, opts Options) (string, error) {
+	id, ok := CanonicalPlatform(platform)
+	if !ok {
+		return "", fmt.Errorf("unsupported platform %q", platform)
+	}
+	platform = id
+
 	nodes = filterForPlatform(nodes, platform, opts)
 	switch platform {
 	case "uri", "shadowrocket":
@@ -61,12 +101,16 @@ func Produce(nodes []Node, platform string, opts Options) (string, error) {
 			return "", err
 		}
 		return base64.StdEncoding.EncodeToString([]byte(list)), nil
+	case "json":
+		return produceJSON(nodes)
 	case "clash", "clashmeta", "stash":
 		return produceClash(nodes, platform, opts)
 	case "singbox":
 		return produceSingBox(nodes, opts)
 	case "v2ray":
 		return produceV2Ray(nodes, opts)
+	case "egern":
+		return produceEgern(nodes)
 	case "surge", "surgemac":
 		return produceSurge(nodes), nil
 	case "loon":
@@ -94,8 +138,11 @@ func produceURIList(nodes []Node) (string, error) {
 
 // Supports reports whether a target platform can represent the node.
 func Supports(platform string, n Node) bool {
+	if id, ok := CanonicalPlatform(platform); ok {
+		platform = id
+	}
 	switch platform {
-	case "uri", "base64", "shadowrocket", "singbox":
+	case "uri", "base64", "shadowrocket", "singbox", "json":
 		return true
 	case "v2ray":
 		switch n.Type {
@@ -135,6 +182,13 @@ func Supports(platform string, n Node) bool {
 	case "surfboard":
 		switch n.Type {
 		case TypeSS, TypeVMess, TypeTrojan, TypeVLESS:
+			return true
+		default:
+			return false
+		}
+	case "egern":
+		switch n.Type {
+		case TypeSS, TypeVMess, TypeTrojan, TypeVLESS, TypeHysteria2, TypeTUIC:
 			return true
 		default:
 			return false

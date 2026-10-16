@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -52,6 +53,9 @@ type Fetcher struct {
 	userAgent         string
 	allowPrivateHosts bool
 	maxBytes          int64
+	cacheMu           sync.Mutex
+	cache             map[string]cacheEntry
+	inflight          map[string]*inflightFetch
 }
 
 // New builds a Fetcher from opts.
@@ -73,6 +77,7 @@ func New(opts Options) *Fetcher {
 		userAgent:         userAgent,
 		allowPrivateHosts: opts.AllowPrivateHosts,
 		maxBytes:          maxBytes,
+		cache:             map[string]cacheEntry{},
 	}
 
 	// Per-address dial timeout. Several addresses may be tried for one host,
